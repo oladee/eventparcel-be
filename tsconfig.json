@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "ES2020", // Set a modern JavaScript version
+        "module": "commonjs", // Keep this as is for Node.js
+        "moduleResolution": "node",
+        "rootDir": "src",
+        "baseUrl": ".",
+        "outDir": "dist",
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "strict": true, // Enabling strict mode for better type safety
+        "esModuleInterop": true, // This allows default imports from modules with no default export
+        "skipLibCheck": true, // Skip type checking of declaration files
+        "typeRoots": ["./node_modules/@types", "./src/@types"], // Ensure TypeScript looks for type definitions here
+        "types": ["node"],
+        "paths": {
+            "hyperwallet-sdk": ["src/@types/hyperwallet-sdk"]
+        } // Explicitly include Node.js types
+    },
+    "include": ["src/**/*", "src/@types/**/*.d.ts"],
+    "exclude": ["node_modules"], // Exclude node_modules to improve compilation time
+}

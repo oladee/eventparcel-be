@@ -1,0 +1,106 @@
+Pickup State,Pickup City,Destination State,Destination City,Base Fee (?),Multiplier (%)
+Lagos,Ikeja,Lagos,Surulere,1500,0
+Lagos,Ikeja,Lagos,Agege,1200,0
+Lagos,Ikeja,Lagos,Lekki,1800,10
+Lagos,Ikeja,Lagos,Ikorodu,2000,15
+Lagos,Lekki,Lagos,Victoria Island,1500,5
+Lagos,Lekki,Lagos,Ajah,1500,5
+Lagos,Ikorodu,Lagos,Epe,2000,10
+Lagos,Apapa,Lagos,Maryland,1700,5
+Lagos,Surulere,Lagos,Yaba,1400,0
+Lagos,Oshodi,Lagos,Badagry,2500,15
+Lagos,Mushin,Lagos,Ikeja,1200,0
+Lagos,Victoria Island,Lagos,Ikoyi,1200,0
+Lagos,Yaba,Ogun,Abeokuta,3000,20
+Lagos,Ikeja,Ogun,Ota,3200,25
+Lagos,Ikorodu,Ogun,Sagamu,3000,20
+Lagos,Ibeju-Lekki,Oyo,Ibadan,4200,32
+Lagos,Ikorodu,Oyo,Ogbomoso,4500,35
+Lagos,Mushin,Osun,Osogbo,4800,40
+Lagos,Oshodi,Osun,Ile-Ife,4800,40
+Lagos,Festac,Abuja,Kubwa,6800,62
+Lagos,Ikeja,Osun,Osogbo,4800,40
+Lagos,Ikeja,Oyo,Ibadan,4200,32
+Lagos,Ikeja,Abuja,Wuse,6800,62
+Lagos,Lekki,Oyo,Ibadan,4200,32
+Lagos,Lekki,Abuja,Mpape,7000,65
+Ogun,Abeokuta,Ogun,Ijebu Ode,1800,10
+Ogun,Sagamu,Ogun,Ijebu Ode,1800,10
+Ogun,Ota,Ogun,Ifo,1500,5
+Ogun,Ijebu Ode,Ogun,Ilaro,2000,10
+Ogun,Ifo,Ogun,Abeokuta,1600,8
+Ogun,Ijebu North,Ogun,Sagamu,1700,10
+Ogun,Abeokuta,Lagos,Ikeja,3000,20
+Ogun,Sagamu,Lagos,Lekki,3500,25
+Ogun,Ota,Lagos,Ajah,3500,25
+Ogun,Ifo,Oyo,Ibadan,3200,28
+Ogun,Ijebu Ode,Osun,Ile-Ife,4200,40
+Ogun,Abeokuta,Abuja,Mpape,6500,60
+Ogun,Ota,Oyo,Ibadan,3200,28
+Ogun,Ifo,Osun,Osogbo,4200,40
+Ogun,Abeokuta,Osun,Iwo,4200,40
+Oyo,Ibadan (North),Oyo,Ibadan (South),1500,0
+Oyo,Ibadan,Oyo,Oyo Town,1800,10
+Oyo,Ibadan,Oyo,Ogbomoso,2000,12
+Oyo,Ogbomoso,Oyo,Iseyin,2000,12
+Oyo,Iseyin,Oyo,Saki,2500,15
+Oyo,Oyo Town,Lagos,Ikeja,4000,30
+Oyo,Ogbomoso,Lagos,Ikorodu,4200,35
+Oyo,Ibadan,Lagos,Lekki,4200,32
+Oyo,Ibadan,Ogun,Sagamu,3200,28
+Oyo,Ibadan,Osun,Ile-Ife,3000,20
+Oyo,Ibadan,Abuja,Wuse,6500,60
+Oyo,Iseyin,Osun,Iwo,3200,25
+Oyo,Iseyin,Abuja,Kubwa,6500,60
+Oyo,Ibadan,Ogun,Abeokuta,3200,28
+Oyo,Ogbomoso,Ogun,Abeokuta,3700,30
+Osun,Osogbo,Osun,Ilesa,1800,10
+Osun,Osogbo,Osun,Iwo,1700,10
+Osun,Ile-Ife,Osun,Ilesa,1800,10
+Osun,Gbongan,Osun,Osogbo,1600,8
+Osun,Osogbo,Oyo,Ibadan,3000,20
+Osun,Ile-Ife,Lagos,Lekki,4800,40
+Osun,Ilesa,Ogun,Abeokuta,3900,30
+Osun,Iwo,Oyo,Ogbomoso,3200,25
+Osun,Iwo,Abuja,Mpape,7000,65
+Osun,Osogbo,Ogun,Sagamu,4200,40
+Osun,Osogbo,Lagos,Ikeja,4800,40
+Osun,Ile-Ife,Oyo,Ibadan,3000,20
+Osun,Iwo,Lagos,Ikeja,4800,40
+Osun,Iwo,Ogun,Abeokuta,4200,40
+Abuja,Garki,Abuja,Wuse,1500,0
+Abuja,Wuse,Abuja,Gwarimpa,1500,0
+Abuja,Lugbe,Abuja,Mpape,1700,5
+Abuja,Nyanya,Abuja,Garki,1600,5
+Abuja,Gwarimpa,Lagos,Ikeja,6500,60
+Abuja,Kubwa,Lagos,Lekki,7000,65
+Abuja,Nyanya,Oyo,Ibadan,6000,55
+Abuja,Mpape,Osun,Osogbo,6500,60
+Abuja,Lugbe,Ogun,Abeokuta,6000,55
+Abuja,Mpape,Lagos,Lekki,7000,65
+Abuja,Wuse,Lagos,Ikeja,6800,62
+Lagos,Others,Abuja,Others,1500,0
+Lagos,Others,Ogun,Others,3200,30
+Lagos,Others,Oyo,Others,4000,35
+Lagos,Others,Osun,Others,4800,40
+Lagos,Others,Lagos,Others,6800,62
+Ogun,Others,Abuja,Others,1500,0
+Ogun,Others,Lagos,Others,3800,30
+Ogun,Others,Oyo,Others,3800,30
+Ogun,Others,Osun,Others,3800,30
+Ogun,Others,Ogun,Others,3800,30
+Oyo,Others,Ogun,Others,3800,30
+Oyo,Others,Osun,Others,3800,30
+Oyo,Others,Abuja,Others,4500,35
+Oyo,Others,Lagos,Others,4500,35
+Oyo,Others,Oyo,Others,1500,0
+Osun,Others,Abuja,Others,1500,0
+Osun,Others,Lagos,Others,5000,40
+Osun,Others,Oyo,Others,3800,30
+Osun,Others,Ogun,Others,3800,30
+Osun,Others,Osun,Others,3800,30
+Abuja,Others,Ogun,Others,3800,30
+Abuja,Others,Oyo,Others,3800,30
+Abuja,Others,Osun,Others,3800,30
+Abuja,Others,Lagos,Others,6500,60
+Abuja,Others,Abuja,Others,1500,0
