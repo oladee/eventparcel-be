@@ -45,7 +45,7 @@ jobs:
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_77A40FDA56B843C0B5F3801792566D82 }}
-          tenant-id:${{ secrets.AZUREAPPSERVICE_TENANTID_41FB1875F5E64C9B9DA50DD78385C84F }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_41FB1875F5E64C9B9DA50DD78385C84F }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A677752B631A413CBDE1B1F4BB79CC02 }}
       
       - name: Deploy to Azure Web App
@@ -54,4 +54,5 @@ jobs:
           app-name: 'app-serv-EventParcel-Backend-V2'
           slot-name: 'Production'
           package: .
+
 
