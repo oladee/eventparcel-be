@@ -45,9 +45,29 @@ import securityConfig, { initRateLimiter } from './config/securityConfig';
 
 dotenv.config();
 
-const app: Application = express();
+// Normalize origins to avoid mismatches due to trailing slashes or casing
+const normalizeOrigin = (o?: string) =>
+    o ? o.replace(/\/$/, "").toLowerCase() : o;
 
-const allowedOrigins: string[] = [
+// Read CORS whitelist from env; support comma/semicolon/whitespace/newlines
+const parseCorsWhitelist = (raw?: string): (string | undefined)[] => {
+    if (!raw) return [];
+    const parts = raw
+        .split(/[\s,;]+/) // split by comma, semicolon, or any whitespace
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(normalizeOrigin);
+    // Deduplicate while preserving order
+    return Array.from(new Set(parts));
+};
+
+const app: Application = express();
+const envWhitelistRaw = process.env.CORS_WHITELIST;
+const envWhitelist = parseCorsWhitelist(envWhitelistRaw);
+
+
+
+const defaultDevWhitelist: string[] = [
   "https://event-parcel-version2.vercel.app",
   "https://event-parcel.vercel.app",
   "https://api.eventparcel.com",
@@ -58,9 +78,12 @@ const allowedOrigins: string[] = [
   "http://localhost:5174"
 ];
 
+const normalizedWhitelist =
+    envWhitelist.length > 0 ? envWhitelist : defaultDevWhitelist;
+
 const corsOptions: CorsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: string | boolean) => void) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || normalizedWhitelist.includes(<string>normalizeOrigin(origin))) {
       callback(null, true); // ✅ Allow the request
     } else {
       console.warn('❌ CORS Rejected:', origin);
