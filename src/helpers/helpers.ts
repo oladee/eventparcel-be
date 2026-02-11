@@ -693,6 +693,7 @@ export const computeDeliveryFee = async (
   destinationCity: string,
   totalQuantity: number
 ): Promise<number> => {
+  console.log("computeDeliveryFee", pickupState, pickupCity, destinationState, destinationCity, totalQuantity);
   // ✅ 1. Restrict delivery to allowed states
   if (!ALLOWED_STATES.includes(destinationState)) {
     throw new Error(
@@ -739,6 +740,8 @@ export const computeDeliveryFee = async (
       destinationCity: { $regex: /^Others$/i },
     });
   }
+
+  console.log("feeRecord", feeRecord);
 
   // ✅ 6. If still not found, return 0 (self-managed delivery)
   if (!feeRecord) return 0;
