@@ -79,7 +79,7 @@ export const paystackWebhook = async (
 ): Promise<Response> => {
   try {
     const paystackSignature = req.headers["x-paystack-signature"] as string;
-    const rawBody = req.rawBody;
+    const rawBody = req.rawBody || req.body;
 
     if (!Buffer.isBuffer(rawBody)) {
       return ErrorHandler.validationError(res, "Raw body is not a buffer");
@@ -95,6 +95,7 @@ export const paystackWebhook = async (
     }
 
     const event: IPaystackEvent = JSON.parse(rawBody.toString());
+    // const event: IPaystackEvent = req.body
 
     const existingEvent = await PaymentService.getPaymentByField({
       paymentReference: event.data.reference,

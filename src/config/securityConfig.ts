@@ -44,6 +44,13 @@ export const initRateLimiter = () => {
 //   }
 // };
 
+const getResetDate = (ms?: number) => {
+  if (typeof ms !== 'number' || isNaN(ms)) {
+    return new Date(Date.now() + 60 * 1000).toISOString(); // fallback 1 min
+  }
+  return new Date(Date.now() + ms).toISOString();
+};
+
 export const rateLimitMiddleware = async (
   req: Request,
   res: Response,
@@ -55,7 +62,7 @@ export const rateLimitMiddleware = async (
     // Set headers manually
     res.setHeader('X-RateLimit-Limit', rateLimiter.points);
     res.setHeader('X-RateLimit-Remaining', rateLimitRes.remainingPoints);
-    res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rateLimitRes.msBeforeNext).toISOString());
+    res.setHeader('X-RateLimit-Reset', getResetDate(rateLimitRes.msBeforeNext));
 
     next();
   } catch (rej: any) {
@@ -63,7 +70,7 @@ export const rateLimitMiddleware = async (
     res.setHeader('Retry-After', String(retrySecs));
     res.setHeader('X-RateLimit-Limit', rateLimiter.points);
     res.setHeader('X-RateLimit-Remaining', 0);
-    res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rej.msBeforeNext).toISOString());
+    res.setHeader('X-RateLimit-Reset', getResetDate(rej.msBeforeNext));
 
     return ErrorHandler.tooManyRequests(res, 'Too many requests - try again later.');
   }

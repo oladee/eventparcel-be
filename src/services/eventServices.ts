@@ -213,140 +213,125 @@ export class EventService {
   public static async getEventSummaryById(eventId: string) {
     const eventObjectId = new mongoose.Types.ObjectId(eventId);
 
-    const result = await Event.aggregate([
-      { $match: { _id: eventObjectId } },
-      {
-        $lookup: {
-          from: "eventgroups",
-          localField: "_id",
-          foreignField: "event",
-          as: "eventGroups"
-        }
-      },
-      { $unwind: { path: "$eventGroups", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "packages",
-          localField: "eventGroups._id",
-          foreignField: "eventGroup",
-          as: "eventGroups.packages"
-        }
-      },
-      {
-        $group: {
-          _id: "$_id",
-          eventName: { $first: "$eventName" },
-          eventImgUrl: { $first: "$eventImgUrl" },
-          eventImgPublicId: { $first: "$eventImgPublicId" },
-          eventDescription: { $first: "$eventDescription" },
-          user: { $first: "$user" },
-          date: { $first: "$date" },
-          time: { $first: "$time" },
-          eventLocation: { $first: "$eventLocation" },
-          numberOfGroups: { $first: "$numberOfGroups" },
-          coHost: { $first: "$coHost" },
-          isDisabled: { $first: "$isDisabled" },
-          hostFirstName: { $first: "$hostFirstName" },
-          hostLastName: { $first: "$hostLastName" },
-          hostEmail: { $first: "$hostEmail" },
-          eventGroups: { $push: "$eventGroups" }
-        }
-      },
-      {
-        // $lookup: {
-        //   from: "orders",
-        //   let: { eventId: "$_id" },
-        //   pipeline: [
-        //     { $match: { $expr: { $eq: ["$eventId", "$$eventId"] } } },
-        //     {
-        //       $group: {
-        //         _id: "$deliveryType",
-        //         count: { $sum: 1 }
-        //       }
-        //     }
-        //   ],
-        //   as: "deliveryStat"
-        // }
-        $lookup: {
-          from: "orders",
-          let: { eventId: "$_id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$eventId", "$$eventId"] },
-                    { $eq: ["$paymentStatus", "paid"] }
-                  ]
-                }
-              }
+    try {
+      // Step 1: Get base event with simple lookups
+      const event = await Event.aggregate([
+        { $match: { _id: eventObjectId } },
+        {
+          $lookup: {
+            from: "eventgroups",
+            localField: "_id",
+            foreignField: "event",
+            as: "eventGroups"
+          }
+        },
+        {
+          $lookup: {
+            from: "paymentanddeliveries",
+            localField: "_id",
+            foreignField: "event",
+            as: "payoutDetails"
+          }
+        },
+        { $unwind: { path: "$payoutDetails", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            eventName: 1,
+            eventImgUrl: 1,
+            eventImgPublicId: 1,
+            eventDescription: 1,
+            user: 1,
+            date: 1,
+            time: 1,
+            eventLocation: 1,
+            numberOfGroups: 1,
+            coHost: 1,
+            isDisabled: 1,
+            hostDetails: {
+              hostFirstName: "$hostFirstName",
+              hostLastName: "$hostLastName",
+              hostEmail: "$hostEmail"
             },
-            {
-              $group: {
-                _id: "$deliveryType",
-                count: { $sum: 1 }
-              }
-            }
-          ],
-        as: "deliveryStat"
-      }
-      },
-      {
-        $lookup: {
-          from: "paymentanddeliveries",
-          localField: "_id",
-          foreignField: "event",
-          as: "payoutDetails"
-        }
-      },
-      { $unwind: { path: "$payoutDetails", preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 1,
-          eventName: 1,
-          eventImgUrl: 1,
-          eventImgPublicId: 1,
-          eventDescription: 1,
-          user: 1,
-          date: 1,
-          time: 1,
-          eventLocation: 1,
-          numberOfGroups: 1,
-          coHost: 1,
-          isDisabled: 1,
-          hostDetails: {
-            hostFirstName: "$hostFirstName",
-            hostLastName: "$hostLastName",
-            hostEmail: "$hostEmail"
-          },
-          eventGroups: 1,
-          payoutDetails: 1,
-          deliveryStat: {
-            $cond: [
-              { $gt: [{ $size: "$deliveryStat" }, 0] },
-              {
-                $arrayToObject: {
-                  $map: {
-                    input: "$deliveryStat",
-                    as: "stat",
-                    in: {
-                      k: "$$stat._id",
-                      v: "$$stat.count"
-                    }
-                  }
-                }
-              },
-              {
-                homeDelivery: 0,
-                pickUp: 0
-              }
-            ]
+            eventGroups: 1,
+            payoutDetails: 1,
           }
         }
-      }
-    ]);
+      ]);
 
-    return result[0] || null; // Return null if no event found
+      if (!event || event.length === 0) {
+        return null;
+      }
+
+      const eventData = event[0];
+
+      // Step 2: Fetch packages for each event group separately
+      if (eventData.eventGroups && eventData.eventGroups.length > 0) {
+        const eventGroupIds = eventData.eventGroups.map((eg: any) => eg._id);
+        
+        const packages = await mongoose.model('Package').find({
+          eventGroup: { $in: eventGroupIds }
+        }).lean();
+
+        // Attach packages to their respective event groups
+        eventData.eventGroups = eventData.eventGroups.map((group: any) => ({
+          ...group,
+          packages: packages.filter((pkg: any) => 
+            pkg.eventGroup.toString() === group._id.toString()
+          )
+        }));
+      }
+
+      // Step 3: Fetch delivery stats separately
+      const deliveryStats = await mongoose.model('Order').aggregate([
+        {
+          $match: {
+            eventId: eventObjectId,
+            paymentStatus: "paid"
+          }
+        },
+        {
+          $group: {
+            _id: "$deliveryType",
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      // Convert delivery stats to object format
+      if (deliveryStats && deliveryStats.length > 0) {
+        eventData.deliveryStat = deliveryStats.reduce((acc: any, stat: any) => {
+          acc[stat._id] = stat.count;
+          return acc;
+        }, { homeDelivery: 0, pickUp: 0 });
+      } else {
+        eventData.deliveryStat = { homeDelivery: 0, pickUp: 0 };
+      }
+
+      return eventData;
+    } catch (error: any) {
+      console.error("Error in getEventSummaryById:", error);
+      
+      // Fallback to simple query if aggregation fails
+      console.log("Attempting fallback simple query...");
+      const simpleEvent = await Event.findById(eventObjectId).lean();
+      
+      if (simpleEvent) {
+        return {
+          ...simpleEvent,
+          hostDetails: {
+            hostFirstName: (simpleEvent as any).hostFirstName,
+            hostLastName: (simpleEvent as any).hostLastName,
+            hostEmail: (simpleEvent as any).hostEmail,
+          },
+          eventGroups: [],
+          deliveryStat: { homeDelivery: 0, pickUp: 0 },
+          payoutDetails: null,
+        };
+      }
+      
+      return null;
+    }
   }
 
 

@@ -75,119 +75,133 @@ class AdminEventController {
     try {
       const { page = "1", limit = "10", orderStatus, search } = req.query;
       const { eventId } = req.params;
+
       if (!eventId) {
         return ErrorHandler.badUserInput(res, "Event ID is required");
       }
 
-      // Parse pagination parameters
-      const pageNumber = Math.max(parseInt(page as string, 10), 1);
-      const limitNumber =
-        limit === "infinity" ? 0 : Math.max(parseInt(limit as string, 10), 1);
-      const skip = (pageNumber - 1) * limitNumber;
+      // --------------------------
+      // Parse pagination safely
+      // --------------------------
+      const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
+      const limitNumberRaw = limit === "infinity" ? 0 : Math.max(parseInt(limit as string, 10), 1);
+      const limitNumber = limitNumberRaw > 0 ? limitNumberRaw : undefined; // undefined = no limit
+      const skip = (pageNumber - 1) * (limitNumber || 0);
 
-      // Prepare orders query
+      // --------------------------
+      // Prepare base orders query
+      // --------------------------
       const ordersQuery: Record<string, any> = { eventId };
       if (orderStatus) ordersQuery.orderStatus = orderStatus;
 
-      // -----------------------
-      // Search filter ONLY by name or email
-      // -----------------------
+      // --------------------------
+      // Prepare search query
+      // --------------------------
       const searchQuery: Record<string, any> = { ...ordersQuery, paymentStatus: "paid" };
 
       if (typeof search === "string" && search.trim()) {
         const searchTerm = search.trim();
-        const searchRegex = new RegExp(searchTerm, "i");
 
-        const emailCondition = { guestEmail: searchRegex }; // fixed: should be guest email
-        const orderIdCondition = { orderId: searchTerm }; // fixed: should be order ID
+        let searchRegex: RegExp | null = null;
+        try {
+          searchRegex = new RegExp(searchTerm, "i");
+        } catch (err) {
+          console.warn("Invalid search regex, ignoring search:", searchTerm);
+          searchRegex = null;
+        }
 
-        if (searchTerm.includes(" ")) {
-          const [first, last] = searchTerm.split(" ");
-          searchQuery.$or = [
-            {
-              guestFirstName: new RegExp(first, "i"),
-              guestLastName: new RegExp(last, "i"),
-            },
-            {
-              guestFirstName: new RegExp(last, "i"),
-              guestLastName: new RegExp(first, "i"),
-            },
-            emailCondition,
-            orderIdCondition,
-          ];
-        } else {
-          searchQuery.$or = [
-            { guestFirstName: searchRegex },
-            { guestLastName: searchRegex },
-            emailCondition,
-            orderIdCondition,
-          ];
+        if (searchRegex) {
+          const emailCondition = { guestEmail: searchRegex };
+          const orderIdCondition = { orderId: searchTerm };
+
+          if (searchTerm.includes(" ")) {
+            const [first, last] = searchTerm.split(" ");
+            searchQuery.$or = [
+              { guestFirstName: new RegExp(first, "i"), guestLastName: new RegExp(last, "i") },
+              { guestFirstName: new RegExp(last, "i"), guestLastName: new RegExp(first, "i") },
+              emailCondition,
+              orderIdCondition,
+            ];
+          } else {
+            searchQuery.$or = [
+              { guestFirstName: searchRegex },
+              { guestLastName: searchRegex },
+              emailCondition,
+              orderIdCondition,
+            ];
+          }
+
+          // Safeguard against empty $or
+          if (!searchQuery.$or || searchQuery.$or.length === 0) {
+            delete searchQuery.$or;
+          }
         }
       }
 
-      // Now execute parallel requests for the remaining data
-      const [eventSummary, salesSummary, [orders, orderSum, totalOrders], payoutSummary] = await Promise.all(
-        [
+      // --------------------------
+      // Execute all data fetches in parallel
+      // --------------------------
+      let eventSummary, salesSummary, orders = [], orderSum = [], totalOrders = 0, payoutSummary = [];
+
+      try {
+        [eventSummary, salesSummary, [orders, orderSum, totalOrders], payoutSummary] = await Promise.all([
           EventService.getEventSummaryById(eventId),
           OrderService.salesSummaries({ eventId }),
           Promise.all([
             OrderService.getAllOrders(searchQuery, skip, limitNumber),
-            OrderService.getAllOrders({ eventId }), // Get all orders for summary
-            OrderService.countOrders({ eventId }), // Count all orders for pagination
+            OrderService.getAllOrders({ eventId }),
+            OrderService.countOrders({ eventId }),
           ]),
-          PaymentService.getPaymentSummaryByEventPayout(eventId), // Get payment and delivery details
-        ]
-      );
-
-      // const eventSummary = await EventService.getEventSummaryById(eventId);
-      // const payoutSummary = await WithdrawalService.calculateHostPayouts(eventSummary.user, "completed");
-      // console.log("Payout Details: ", JSON.stringify(payoutSummary, null, 2));
+          PaymentService.getPaymentSummaryByEventPayout(eventId),
+        ]);
+      } catch (mongoError) {
+        console.error("Mongo query failed:", mongoError);
+        return ErrorHandler.internalServerError(res, "Failed to fetch event data");
+      }
 
       if (!eventSummary) {
         return ErrorHandler.notFound(res, "Event not found");
       }
 
+      // --------------------------
       // Calculate order summaries
+      // --------------------------
       const orderSummary = calculateOrderSummary(orderSum);
-      // const nairaSales = calculateOverallSales(orderSum, "NGN");
-      // const dollarSales = calculateOverallSales(orderSum, "USD");
 
       const { recentOrders, ...filteredSummary } = orderSummary;
 
-      // console.log("Sales Summary: ", JSON.stringify(salesSummary, null, 2));
-
-      // NGN and USD Payout cut 
-      // NGN 7% of total sales
-      // USD 8.5% of total sales
-
+      // --------------------------
+      // Build sales summary safely
+      // --------------------------
       eventSummary.salesSummary = {
         NGN: {
           overallSales: salesSummary[0]?.sales[0]?.totalSales || 0,
-          packageSold: salesSummary[0]?.sales[0]?.totalPackagesSold || 0, 
-          // netPayout: (salesSummary[0]?.sales[0]?.totalSales - (salesSummary[0]?.sales[0]?.totalHomeDeliveryFee + salesSummary[0]?.sales[0]?.totalVATtax)) || 0, 
-          netPayout: payoutSummary.find(p => p.currency === "NGN")?.payout || 0, // Safeguard against undefined
-          // netPayout2: payoutSummary?.[0]?.currencyBreakdown?.[1]?.currency === "NGN" ? payoutSummary?.[0]?.currencyBreakdown?.[1]?.total : "Not NGN",
+          packageSold: salesSummary[0]?.sales[0]?.totalPackagesSold || 0,
+          netPayout: payoutSummary.find(p => p.currency === "NGN")?.payout || 0,
         },
         USD: {
           overallSales: salesSummary[0]?.sales[1]?.totalSales || 0,
           packageSold: salesSummary[0]?.sales[1]?.totalPackagesSold || 0,
-          // netPayout: (salesSummary[0]?.sales[1]?.totalSales - (salesSummary[0]?.sales[1]?.totalHomeDeliveryFee + salesSummary[0]?.sales[1]?.totalVATtax)) || 0,
-         netPayout: payoutSummary.find(p => p.currency === "USD")?.payout || 0, // Safeguard against undefined
-          // netPayout2: payoutSummary?.[0]?.currencyBreakdown?.[0]?.currency === "USD" ? payoutSummary?.[0]?.currencyBreakdown?.[0]?.total : "Not USD",
-        }
-      }
+          netPayout: payoutSummary.find(p => p.currency === "USD")?.payout || 0,
+        },
+      };
 
-      // Safeguard deliveryStat
+      // --------------------------
+      // Safeguard delivery stats
+      // --------------------------
       eventSummary.deliveryStat = {
         homeDelivery: eventSummary.deliveryStat?.homeDelivery || 0,
         pickUp: eventSummary.deliveryStat?.pickUp || 0,
       };
 
-      // Calculate total pages
-      const totalPages =
-        limitNumber > 0 ? Math.ceil(totalOrders / limitNumber) : 1;
+      // --------------------------
+      // Pagination summary
+      // --------------------------
+      const totalPages = limitNumber ? Math.ceil(totalOrders / limitNumber) : 1;
 
-      // Safeguard OrderStat
+      // --------------------------
+      // Attach orders info safely
+      // --------------------------
       eventSummary.orders = {
         orders,
         currentPage: pageNumber,
@@ -195,11 +209,16 @@ class AdminEventController {
         totalOrders,
       };
 
+      // --------------------------
+      // Return full response
+      // --------------------------
       return sendResponse(res, 200, "Event summary fetched", eventSummary);
     } catch (error: any) {
-      return ErrorHandler.internalServerError(res, error.message);
+      console.error("Unexpected error in getAnEventSummary:", error);
+      return ErrorHandler.internalServerError(res, "An unexpected error occurred");
     }
   }
+
 }
 
 export default AdminEventController;
