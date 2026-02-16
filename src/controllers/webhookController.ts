@@ -607,7 +607,7 @@ if (order.deliveryType === "selfManaged" || order.deliveryType === "homeDelivery
     await sendMail({
       email: host.email,
       subject: "Guest Order Requires Your Assistance - Event Parcel",
-      html: notificationEmail(hostName, selfManagedEmailBody),
+      html: notificationEmail(hostName, selfManagedEmailBody,true),
     });
 
     console.log(`📧 Self-managed delivery email sent to host: ${host.email}`);
@@ -625,7 +625,7 @@ if (order.deliveryType === "selfManaged" || order.deliveryType === "homeDelivery
       await sendMail({
         email: coHostEmail,
         subject: "Self-Managed Delivery Order Notification",
-        html: notificationEmail(hostName, selfManagedEmailBody),
+        html: notificationEmail(hostName, selfManagedEmailBody,true),
       });
     }
   }
@@ -788,7 +788,7 @@ This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName
         html: notificationEmail(
           ((titleCase(`${host.firstName} ${host.lastName}`)) ?? host.email),
           `Your event received a payment of ${formatPrice(paymentRecord.amount, currency as "NGN" | "USD" | undefined)} ${currency}. Reference: ${paymentRecord.paymentReference}`
-        ),
+        ,true),
       }),
 
       // Host in-app notification
