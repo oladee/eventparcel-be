@@ -79,7 +79,7 @@ export const paystackWebhook = async (
 ): Promise<Response> => {
   try {
     const paystackSignature = req.headers["x-paystack-signature"] as string;
-    const rawBody = req.rawBody || req.body;
+    const rawBody = req?.rawBody || req.body;
 
     if (!Buffer.isBuffer(rawBody)) {
       return ErrorHandler.validationError(res, "Raw body is not a buffer");
