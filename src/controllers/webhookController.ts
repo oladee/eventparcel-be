@@ -746,7 +746,7 @@ const superAdmins = await UserService.getUsers({
 const adminEmailBody = `
 <p>Dear Team,</p>
 <p>
-This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName}</strong> has made payments for a package under the Event <strong>${order?.eventId?.eventTitle || "N/A"}</strong>.
+This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName}</strong> has made payments for a package under the Event <strong>${order?.eventId?.eventName || "N/A"}</strong>.
 </p>
 <h4>Order Details:</h4>
 <p>${packageDetails}</p>
@@ -768,6 +768,8 @@ This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName
 <p>Regards,<br/>Event Parcel</p>
 `;
 
+console.log(order.eventId)
+
 
     // Email & Notification
     const now = new Date();
@@ -778,7 +780,7 @@ This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName
       sendMail({
         email: order.guestEmail,
         subject: "Payment Successful",
-        html: notificationEmail((titleCase(`${order.guestFirstName} ${order.guestLastName}`) ?? order.guestEmail), emailBody),
+        html: notificationEmail((titleCase(`${order.guestFirstName} ${order.guestLastName}`) ?? order.guestEmail), emailBody,true),
       }),
 
       // Host email
