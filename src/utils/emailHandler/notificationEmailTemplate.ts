@@ -90,8 +90,6 @@ const notificationEmail = (firstName: string, emailBody: string, isHtmlBody: boo
             ${isHtmlBody ? emailBody : `<p>${emailBody}</p>`}
 
             <p>If this was not you, please contact our support team immediately.</p>
-
-            <p>Event Parcel Team</p>
         </div>
         <div class="email-footer">
                 <p style="color: #333;">&#10084; &nbsp; <strong>Event Parcel</strong></p>

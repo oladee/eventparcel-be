@@ -79,9 +79,10 @@ export const paystackWebhook = async (
 ): Promise<Response> => {
   try {
     const paystackSignature = req.headers["x-paystack-signature"] as string;
-    const rawBody = req?.rawBody || req.body;
-
+    const rawBody = req?.rawBody || req?.body;
+    
     if (!Buffer.isBuffer(rawBody)) {
+      console.log("Raw body is not a buffer")
       return ErrorHandler.validationError(res, "Raw body is not a buffer");
     }
 
@@ -561,7 +562,7 @@ export const handleChargeSuccess = async (
     await Promise.all([paymentRecord.save(), order.save(), host.save()]);
 
     // ✅ Notify host if deliveryType is "selfManaged"
-if (order.deliveryType === "selfManaged" || order.deliveryType === "homeDelivery") {
+if (order.deliveryType === "selfManaged") {
   const hostName = `${titleCase(host.firstName)} ${titleCase(host.lastName)}`;
   const guestName = `${titleCase(order.guestFirstName)} ${titleCase(order.guestLastName)}`;
 
@@ -809,7 +810,7 @@ console.log(order.eventId)
     sendMail({
       email: admin.email,
       subject: "Payment Notification",
-      html: notificationEmail("Team", adminEmailBody),
+      html: notificationEmail("Team", adminEmailBody,true),
     })
   ),
     ]);
