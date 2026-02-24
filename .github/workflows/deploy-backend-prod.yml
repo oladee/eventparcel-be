@@ -1,0 +1,56 @@
+# Build and deploy Node.js app to Azure Web App - app-serv-EventParcel-Backend-V2-Prod
+name: Build and deploy Node.js app to Azure Web App - app-serv-EventParcel-Backend-V2-Prod
+
+on:
+  workflow_dispatch:
+
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build TypeScript
+        run: npm run build
+      
+      - name: Install production dependencies only
+        run: |
+          rm -rf node_modules
+          npm ci --production
+      
+      - name: Verify dist folder exists
+        run: |
+          echo "Checking dist folder..."
+          ls -la dist/
+          echo "✓ dist folder exists!"
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_82F8EEC6795E48EEA2EC9D9E06F9D6CE }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_416C069E8E5E42DBA30E0B3B0CAFD246 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_97AC939700D94779BD847723F71ACE68 }}
+      
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'app-serv-EventParcel-Backend-V2-Prod'
+          slot-name: 'Production'
+          package: .
+
+
