@@ -2,9 +2,6 @@
 name: Build and deploy Node.js app to Azure Web App - app-serv-EventParcel-Backend-V2
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -54,5 +51,6 @@ jobs:
           app-name: 'app-serv-EventParcel-Backend-V2'
           slot-name: 'Production'
           package: .
+
 
 
