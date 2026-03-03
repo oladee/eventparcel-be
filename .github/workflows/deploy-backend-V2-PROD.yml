@@ -1,5 +1,4 @@
-# Build and deploy Node.js app to Azure Web App - app-serv-EventParcel-Backend-V2-Prod
-name: Build and deploy Node.js app to Azure Web App - app-serv-EventParcel-Backend-V2-Prod
+# Build and deploy Next.js app to Azure Web App (NO ARTIFACTS)
 
 on:
   workflow_dispatch:
@@ -52,5 +51,6 @@ jobs:
           app-name: 'app-serv-EventParcel-Backend-V2-Prod'
           slot-name: 'Production'
           package: .
+
 
 
