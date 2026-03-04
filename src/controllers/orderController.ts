@@ -2232,6 +2232,7 @@ export const calculateOrderSummary = (orders: IOrder[], contacts?: IGuestTrackin
         id: order.orderId,
         date: order.createdAt ? order.createdAt.toISOString().split("T")[0] : "",
         status: order.orderStatus,
+        deliveryMethod : order.deliveryType,
         product: order.items.map(item => item.packageTitle).join(", "),
         price: order.totalAmount,
         quantity: order.items.reduce((acc, item) => acc + item.quantity, 0),
