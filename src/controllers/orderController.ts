@@ -2361,7 +2361,7 @@ export const viewOrdersDynamically = async (req: Request, res: Response): Promis
         ]);
 
         const totalPages = Math.ceil(totalOrders / limitNumber);
-        const orderSummary: IOrderSummary = calculateOrderSummary(orderSum, contacts);
+        const  orderSummary: IOrderSummary = calculateOrderSummary(orderSum, contacts);
 
         if (!orders.length) {
             return sendResponse(res, 200, `No orders found for the selected ${filterType}.`, []);

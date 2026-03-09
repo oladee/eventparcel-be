@@ -579,13 +579,11 @@ if (order.deliveryType === "selfManaged") {
   const selfManagedEmailBody = `
     <p>Dear ${hostName},</p>
     <p>
-      This is to notify you that <strong>${guestName}</strong> has made payment for a package.
-      Due to their residence falling outside our coverage states, they have specifically requested
-      your assistance in managing their order delivery.
+      This is to notify you that <strong>${guestName}</strong> has made payment for your package.
+      Although, their address falls outside of our coverage states, we would make every effort to ensure their parcel reaches them via other third party delivery partners.
     </p>
     <p>
-      Event Parcel team is available to assist you where necessary.
-      Please contact us via email <a href="mailto:hi@eventparcel.com">hi@eventparcel.com</a>
+      This is for your information only and no action required. If you have any questions, contact us via email <a href="mailto:hi@eventparcel.com">hi@eventparcel.com</a>
       or on WhatsApp at <a href="https://wa.me/2349161939774">09161939774</a>.
     </p>
 
