@@ -38,6 +38,7 @@ import dotenv from "dotenv";
 import { errorHandler } from "./utils/errorHandler/errorMiddleware";
 // import "./cron-job/nairaWithdrawalJob";
 import "./cron-job/replayMissedGIGcaptureJob";
+import "./cron-job/exchangeRateUpdateJob";
 import { WhatsAppWebhook } from './controllers/whatsappWebhook';
 import { StatusTracker } from './controllers/whatsappStatusTracker';
 import securityConfig, { initRateLimiter } from './config/securityConfig';

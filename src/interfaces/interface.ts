@@ -27,50 +27,59 @@ export interface IPaystackEvent {
   };
 }
 
-// export interface IPaypalEvent {
-//   event_type: string;
-//   resource: {
-//     id: string;
-//     amount: {
-//       value: string;
-//       currency_code: string;
-//     };
-//     transaction_fee?: {
-//       value: string;
-//       currency_code: string;
-//     };
-//     payer: {
-//       email_address: string;
-//     };
-//   };
-// }
+export interface IPaypalAmount {
+  value: string;
+  currency_code: string;
+}
+
+export interface IPaypalSellerReceivableBreakdown {
+  gross_amount: IPaypalAmount;
+  paypal_fee: IPaypalAmount;
+  net_amount: IPaypalAmount;
+}
+
+export interface IPaypalCapture {
+  id: string;
+  status?: string;
+  amount?: IPaypalAmount;
+  seller_receivable_breakdown?: IPaypalSellerReceivableBreakdown;
+}
+
+export interface IPaypalPurchaseUnit {
+  reference_id?: string;
+  amount?: IPaypalAmount;
+  payments?: {
+    captures?: IPaypalCapture[];
+  };
+}
 
 export interface IPaypalEvent {
   event_type: string;
   resource: {
     id: string;
-    amount: {
-      value: string;
-      currency_code: string;
-    };
-    seller_receivable_breakdown?: {
-      gross_amount: {
-        value: string;
-        currency_code: string;
-      };
-      paypal_fee: {
-        value: string;
-        currency_code: string;
-      };
-      net_amount: {
-        value: string;
-        currency_code: string;
-      };
-    };
+    status?: string;
+    amount?: IPaypalAmount;
+    seller_receivable_breakdown?: IPaypalSellerReceivableBreakdown;
     payer?: {
       email_address: string;
     };
+    purchase_units?: IPaypalPurchaseUnit[];
+    supplementary_data?: {
+      related_ids?: {
+        order_id?: string;
+        capture_id?: string;
+      };
+    };
   };
+}
+
+export interface IPaypalCaptureResponse {
+  id: string;
+  status?: string;
+  payer?: {
+    email_address?: string;
+  };
+  purchase_units?: IPaypalPurchaseUnit[];
 }
 
 
@@ -365,7 +374,7 @@ export interface IPickUpDetails {
   pickUpStartTimeZone: string;
   pickUpAddress: string;
 }
-    
+
 
 // Define the type once for reuse
 export interface CurrencySummaryType {

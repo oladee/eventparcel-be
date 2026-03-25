@@ -10,9 +10,10 @@ import ms, { StringValue } from 'ms';
 import dotenv from "dotenv";
 import crypto from 'crypto';
 import { ErrorHandler } from '../utils/errorHandler/errorHandler';
-import axios from "axios";
 import { IOrder, IOrderItem, IPackageDeliveryInfo } from "../interfaces/modelInterface";
 import { ObjectId } from "mongoose";
+import redisClient from "../config/redisConfig";
+import { ExchangeRateModel } from "../models/exchangeRateModel";
 dotenv.config();
 
 const SECRET_KEY: string = process.env.JWT_SECRET || 'your_secret_key';
@@ -509,14 +510,63 @@ export const parseDateTime = (dateStr?: any, timeStr?: any): Date | undefined =>
 
 
 
-// Convert USD to NGN using ExchangeRate-API
-const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
+// Convert NGN to USD from cached/DB exchange rate
 export const convertNgnToUsd = async (amountInNgn: number) => {
   try {
-    const response = await axios.get(`https://v6.exchangerate-api.com/v6/${EXCHANGE_RATE_API_KEY}/latest/USD`);
-    const exchangeRate = response.data.conversion_rates.NGN;
-    if (!exchangeRate) throw new Error("Unable to fetch NGN exchange rate.");
-    return amountInNgn / exchangeRate;
+    const REDIS_RATE_KEY = "exchange-rate:NGN:USD";
+    const REDIS_CACHE_TTL_SECONDS = 30 * 60;
+
+    const cachedRate = await redisClient.get(REDIS_RATE_KEY);
+    if (cachedRate) {
+      const parsedRate = Number(cachedRate);
+      if (!Number.isNaN(parsedRate) && parsedRate > 0) {
+        return amountInNgn * parsedRate;
+      }
+    }
+
+    const rateRecord = await ExchangeRateModel.findOne({ from: "NGN", to: "USD" });
+    if (!rateRecord?.rate || rateRecord.rate <= 0) {
+      throw new Error("Exchange rate unavailable. Please try again shortly.");
+    }
+
+    await redisClient.set(REDIS_RATE_KEY, rateRecord.rate.toString(), "EX", REDIS_CACHE_TTL_SECONDS);
+
+    return amountInNgn * rateRecord.rate;
+  } catch (error) {
+    console.error("Error converting NGN to USD:", error);
+    throw new Error("Failed to convert currency.");
+  }
+};
+
+
+export const convertUsdToNgn = async (amountInUsd: number) => {
+  try {
+    const REDIS_RATE_KEY = "exchange-rate:USD:NGN";
+    const REDIS_CACHE_TTL_SECONDS = 30 * 60;
+
+    const cachedRate = await redisClient.get(REDIS_RATE_KEY);
+    if (cachedRate) {
+      const parsedRate = Number(cachedRate);
+      if (!Number.isNaN(parsedRate) && parsedRate > 0) {
+        return amountInUsd * parsedRate;
+      }
+    }
+
+    const directRateRecord = await ExchangeRateModel.findOne({ from: "USD", to: "NGN" });
+    if (directRateRecord?.rate && directRateRecord.rate > 0) {
+      await redisClient.set(REDIS_RATE_KEY, directRateRecord.rate.toString(), "EX", REDIS_CACHE_TTL_SECONDS);
+      return amountInUsd * directRateRecord.rate;
+    }
+
+    const inverseRateRecord = await ExchangeRateModel.findOne({ from: "NGN", to: "USD" });
+    if (!inverseRateRecord?.rate || inverseRateRecord.rate <= 0) {
+      throw new Error("Exchange rate unavailable. Please try again shortly.");
+    }
+
+    const usdToNgnRate = 1 / inverseRateRecord.rate;
+    await redisClient.set(REDIS_RATE_KEY, usdToNgnRate.toString(), "EX", REDIS_CACHE_TTL_SECONDS);
+
+    return amountInUsd * usdToNgnRate;
   } catch (error) {
     console.error("Error converting USD to NGN:", error);
     throw new Error("Failed to convert currency.");

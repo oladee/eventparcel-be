@@ -10,6 +10,7 @@ import { notificationEmail } from "../utils/emailHandler/notificationEmailTempla
 import { sendMail } from "../utils/emailHandler/email";
 import {
   IPaypalEvent,
+  IPaypalCapture,
   IPaystackEvent,
   INormalizedPaymentEvent,
   IHwEvent,
@@ -34,31 +35,48 @@ export const normalizePaystackEvent = (
   amount: event.data.amount / 100,
   currency: event.data.currency,
   email: event.event === "charge.success"
-      ? (event.data as any).customer?.email
-      : event.event === "transfer.success"
+    ? (event.data as any).customer?.email
+    : event.event === "transfer.success"
       ? (event.data as any).recipient?.email
       : undefined,
   provider: "paystack",
   transfer_code: event.data.transfer_code ? event.data.transfer_code : undefined,
   fees: event.event === "charge.success"
-      ? ((event.data as any).fees ?? 0) / 100
-      : event.event === "transfer.success"
+    ? ((event.data as any).fees ?? 0) / 100
+    : event.event === "transfer.success"
       ? ((event.data as any).fee_charged ?? 0) / 100
       : undefined,
 });
 
 const normalizePaypalEvent = (
   event: IPaypalEvent
-): INormalizedPaymentEvent => ({
-  reference: event.resource.id,
-  amount: parseFloat(event.resource?.amount?.value),
-  currency: event.resource.amount?.currency_code,
-  email: event.resource.payer?.email_address ?? "",
-  provider: "paypal",
-  fees: event.resource.seller_receivable_breakdown?.paypal_fee
-    ? parseFloat(event.resource.seller_receivable_breakdown.paypal_fee.value)
-    : undefined,
-});
+): INormalizedPaymentEvent => {
+  const capture = event.resource.purchase_units?.flatMap(
+    (unit) => unit.payments?.captures ?? []
+  )[0] as IPaypalCapture | undefined;
+  const amount =
+    capture?.amount ??
+    event.resource.amount ??
+    event.resource.purchase_units?.[0]?.amount;
+
+  return {
+    reference:
+      event.resource.supplementary_data?.related_ids?.order_id ??
+      event.resource.id,
+    amount: parseFloat(amount?.value ?? "0"),
+    currency: amount?.currency_code ?? "USD",
+    email: event.resource.payer?.email_address ?? "",
+    provider: "paypal",
+    transfer_code:
+      capture?.id ?? event.resource.supplementary_data?.related_ids?.capture_id,
+    status: capture?.status ?? event.resource.status,
+    fees: capture?.seller_receivable_breakdown?.paypal_fee
+      ? parseFloat(capture.seller_receivable_breakdown.paypal_fee.value)
+      : event.resource.seller_receivable_breakdown?.paypal_fee
+        ? parseFloat(event.resource.seller_receivable_breakdown.paypal_fee.value)
+        : undefined,
+  };
+};
 
 const normalizeHwEvent = (event: IHwEvent): INormalizedPaymentEvent => ({
   reference: event.object.clientPaymentId,
@@ -80,7 +98,7 @@ export const paystackWebhook = async (
   try {
     const paystackSignature = req.headers["x-paystack-signature"] as string;
     const rawBody = req?.rawBody || req?.body;
-    
+
     if (!Buffer.isBuffer(rawBody)) {
       console.log("Raw body is not a buffer")
       return ErrorHandler.validationError(res, "Raw body is not a buffer");
@@ -134,6 +152,97 @@ export const paystackWebhook = async (
   }
 };
 
+// {
+//   "id": "WH-6P899338W4760581U-7DT3424405642281Y",
+//   "create_time": "2026-03-24T14:24:32.383Z",
+//   "resource_type": "checkout-order",
+//   "event_type": "CHECKOUT.ORDER.APPROVED",
+//   "summary": "An order has been approved by buyer",
+//   "resource": {
+//     "create_time": "2026-03-24T14:22:31Z",
+//     "purchase_units": [
+//       {
+//         "reference_id": "REF-1774362150172",
+//         "amount": {
+//           "currency_code": "USD",
+//           "value": "10.00",
+//           "breakdown": {}
+//         },
+//         "payee": {
+//           "email_address": "sb-w43wto50125686@business.example.com",
+//           "merchant_id": "54XTXDGRRDCYJ",
+//           "display_data": {
+//             "brand_name": "Event_Parcel"
+//           }
+//         }
+//       }
+//     ],
+//     "links": [
+//       {
+//         "href": "https://api.sandbox.paypal.com/v2/checkout/orders/4LX15800HC000342K",
+//         "rel": "self",
+//         "method": "GET"
+//       },
+//       {
+//         "href": "https://api.sandbox.paypal.com/v2/checkout/orders/4LX15800HC000342K",
+//         "rel": "update",
+//         "method": "PATCH"
+//       },
+//       {
+//         "href": "https://api.sandbox.paypal.com/v2/checkout/orders/4LX15800HC000342K/capture",
+//         "rel": "capture",
+//         "method": "POST"
+//       }
+//     ],
+//     "id": "4LX15800HC000342K",
+//     "payment_source": {
+//       "paypal": {
+//         "email_address": "sb-goqss50074236@personal.example.com",
+//         "account_id": "YURHH3JFDJTYW",
+//         "account_status": "VERIFIED",
+//         "name": {
+//           "given_name": "John",
+//           "surname": "Doe"
+//         },
+//         "address": {
+//           "country_code": "US"
+//         }
+//       }
+//     },
+//     "intent": "CAPTURE",
+//     "payer": {
+//       "name": {
+//         "given_name": "John",
+//         "surname": "Doe"
+//       },
+//       "email_address": "sb-goqss50074236@personal.example.com",
+//       "payer_id": "YURHH3JFDJTYW",
+//       "address": {
+//         "country_code": "US"
+//       }
+//     },
+//     "status": "APPROVED"
+//   },
+//   "status": "SUCCESS",
+//   "transmissions": [],
+//   "links": [
+//     {
+//       "href": "https://api.sandbox.paypal.com/v1/notifications/webhooks-events/WH-6P899338W4760581U-7DT3424405642281Y",
+//       "rel": "self",
+//       "method": "GET",
+//       "encType": "application/json"
+//     },
+//     {
+//       "href": "https://api.sandbox.paypal.com/v1/notifications/webhooks-events/WH-6P899338W4760581U-7DT3424405642281Y/resend",
+//       "rel": "resend",
+//       "method": "POST",
+//       "encType": "application/json"
+//     }
+//   ],
+//   "event_version": "1.0",
+//   "resource_version": "2.0"
+// }
+
 export const paypalWebhook = async (
   req: Request,
   res: Response
@@ -152,25 +261,45 @@ export const paypalWebhook = async (
 
     console.log("Paypal Event: ", event);
 
-    const reference = resource.id;
+    const normalizedEvent = normalizePaypalEvent(event);
+    const reference = normalizedEvent.reference;
 
     const existingTransaction = await PaymentService.getPaymentByField({
-      reference,
-      status: "successful",
+      paymentReference: reference,
+      paymentStatus: "paid",
     });
 
     if (existingTransaction) {
       return sendResponse(res, 200, "Event already processed");
     }
 
-    const normalizedEvent = normalizePaypalEvent(event);
+    if (event_type === "CHECKOUT.ORDER.APPROVED") {
+      const pendingPayment = await PaymentService.getPaymentByField({
+        paymentReference: reference,
+      });
+
+      if (!pendingPayment) {
+        console.warn("⚠️ No payment record found for PayPal order:", reference);
+        return sendResponse(res, 200, "Payment record not found");
+      }
+
+      try {
+        const capturedPayment = await PaymentService.capturePaypalOrder(reference);
+        await handleChargeSuccess(capturedPayment);
+      } catch (captureError) {
+        console.error("PayPal capture failed:", captureError);
+        await handleChargeFailed(normalizedEvent);
+        return sendResponse(res, 200, "PayPal order capture failed");
+      }
+
+      return res.status(200).json({ received: true });
+    }
 
     const eventHandlers: Record<
       string,
       (event: INormalizedPaymentEvent) => Promise<void>
     > = {
-      "CHECKOUT.ORDER.APPROVED": handleChargeSuccess,
-      "PAYMENT.CAPTURE.COMPLETED": handleChargeSuccess,
+      // "PAYMENT.CAPTURE.COMPLETED": handleChargeSuccess,
       "PAYMENT.CAPTURE.DENIED": handleChargeFailed,
       "PAYMENT.CAPTURE.FAILED": handleChargeFailed,
       "PAYMENT.PAYOUTSBATCH.SUCCESS": handleTransferSuccess,
@@ -433,7 +562,7 @@ export const handleChargeSuccess = async (
     order.paymentStatus = "paid";
     // order.orderStatus = order.deliveryType === "homeDelivery" ? "shipped" : "pending";
 
-    const deductPromise = await PackageService.deductPackageQuantities( 
+    const deductPromise = await PackageService.deductPackageQuantities(
       order.items.map((item) => ({
         ...item,
         quantity: item.quantity ?? null,
@@ -457,68 +586,68 @@ export const handleChargeSuccess = async (
       return;
     }
 
-//     // capture shipment if home delivery is selected and payment is successful (paymentStatus: paid)
-// if (hasPlatformHomeDelivery2(order?.deliveryType, order, eventPackages)) {
-//   const {
-//     eventId,
-//     guestFirstName,
-//     guestLastName,
-//     guestPhoneNumber,
-//     shippingAddress,
-//     addressLatitude,
-//     addressLongitude,
-//     city,
-//     state,
-//     dispatchType,
-//     items
-//   } = order;
+    //     // capture shipment if home delivery is selected and payment is successful (paymentStatus: paid)
+    // if (hasPlatformHomeDelivery2(order?.deliveryType, order, eventPackages)) {
+    //   const {
+    //     eventId,
+    //     guestFirstName,
+    //     guestLastName,
+    //     guestPhoneNumber,
+    //     shippingAddress,
+    //     addressLatitude,
+    //     addressLongitude,
+    //     city,
+    //     state,
+    //     dispatchType,
+    //     items
+    //   } = order;
 
-//   const shippingRequest = await buildShippingPayload(eventId, {
-//     guestFirstName,
-//     guestLastName,
-//     guestPhoneNumber,
-//     shippingAddress,
-//     addressLatitude,
-//     addressLongitude,
-//     city,
-//     state,
-//     dispatchType,
-//     items,
-//   }, "capture");
+    //   const shippingRequest = await buildShippingPayload(eventId, {
+    //     guestFirstName,
+    //     guestLastName,
+    //     guestPhoneNumber,
+    //     shippingAddress,
+    //     addressLatitude,
+    //     addressLongitude,
+    //     city,
+    //     state,
+    //     dispatchType,
+    //     items,
+    //   }, "capture");
 
-//   try {
-//     const captureShipment = await GIGService.captureShipment(shippingRequest);
-//     order.trackingId = captureShipment?.captureData?.waybill || "";
-//   } catch (error: any) {
-//     const errMsg = error?.message || "";
+    //   try {
+    //     const captureShipment = await GIGService.captureShipment(shippingRequest);
+    //     order.trackingId = captureShipment?.captureData?.waybill || "";
+    //   } catch (error: any) {
+    //     const errMsg = error?.message || "";
 
-//     console.error("❌ Unable to capture shipment:", errMsg);
+    //     console.error("❌ Unable to capture shipment:", errMsg);
 
-//     if (errMsg.includes("Insufficient Wallet Balance")) {
-//       await sendMail({
-//         email: "admin@eventparcel.com, ebenezertope4@gmail.com",
-//         subject: "GIG Wallet Low: Shipment Capture Failed",
-//         html: notificationEmail("Admin", 
-//         `
-//           <p><strong>Failed to capture shipment due to low wallet balance.</strong></p>
-//           <p>Order ID: ${order.orderId}</p>
-//           <p>Reference: ${paymentRecord.paymentReference}</p>
-//           <p>Event: ${order?.eventId?.eventTitle || "N/A"}</p>
-//           <p>Error Message: <code>${errMsg}</code></p>
-//         `
-//         ),
-//       });
-      
-//       order.reprocess = true;
-//       await order.save();
+    //     if (errMsg.includes("Insufficient Wallet Balance")) {
+    //       await sendMail({
+    //         email: "admin@eventparcel.com, ebenezertope4@gmail.com",
+    //         subject: "GIG Wallet Low: Shipment Capture Failed",
+    //         html: notificationEmail("Admin", 
+    //         `
+    //           <p><strong>Failed to capture shipment due to low wallet balance.</strong></p>
+    //           <p>Order ID: ${order.orderId}</p>
+    //           <p>Reference: ${paymentRecord.paymentReference}</p>
+    //           <p>Event: ${order?.eventId?.eventTitle || "N/A"}</p>
+    //           <p>Error Message: <code>${errMsg}</code></p>
+    //         `
+    //         ),
+    //       });
 
-//       console.warn("⚠️ Skipped tracking ID update due to wallet issue");
-//     } else {
-//       // If it's another error, optionally throw or log
-//       throw error;
-//     }
-//   }
-// }
+    //       order.reprocess = true;
+    //       await order.save();
+
+    //       console.warn("⚠️ Skipped tracking ID update due to wallet issue");
+    //     } else {
+    //       // If it's another error, optionally throw or log
+    //       throw error;
+    //     }
+    //   }
+    // }
 
     const deliveryFee = order?.homeDeliveryFee || 0;
     const tax = order?.tax || 0;
@@ -562,21 +691,21 @@ export const handleChargeSuccess = async (
     await Promise.all([paymentRecord.save(), order.save(), host.save()]);
 
     // ✅ Notify host if deliveryType is "selfManaged"
-if (order.deliveryType === "selfManaged") {
-  const hostName = `${titleCase(host.firstName)} ${titleCase(host.lastName)}`;
-  const guestName = `${titleCase(order.guestFirstName)} ${titleCase(order.guestLastName)}`;
+    if (order.deliveryType === "selfManaged") {
+      const hostName = `${titleCase(host.firstName)} ${titleCase(host.lastName)}`;
+      const guestName = `${titleCase(order.guestFirstName)} ${titleCase(order.guestLastName)}`;
 
-  const packageDetails = order.items
-    .map(
-      (item) =>
-        `${item.packageTitle} × ${item.quantity} = ${formatPrice(
-          item.packagePrice * item.quantity,
-          paymentRecord.currency as "NGN" | "USD" | undefined
-        )}`
-    )
-    .join("<br/>");
+      const packageDetails = order.items
+        .map(
+          (item) =>
+            `${item.packageTitle} × ${item.quantity} = ${formatPrice(
+              item.packagePrice * item.quantity,
+              paymentRecord.currency as "NGN" | "USD" | undefined
+            )}`
+        )
+        .join("<br/>");
 
-  const selfManagedEmailBody = `
+      const selfManagedEmailBody = `
     <p>Dear ${hostName},</p>
     <p>
       This is to notify you that <strong>${guestName}</strong> has made payment for your package.
@@ -601,38 +730,38 @@ if (order.deliveryType === "selfManaged") {
     <p>Regards,<br/>Event Parcel</p>
   `;
 
-  // 🧠 Send to host
-  try {
-    await sendMail({
-      email: host.email,
-      subject: "Guest Order Requires Your Assistance - Event Parcel",
-      html: notificationEmail(hostName, selfManagedEmailBody,true),
-    });
+      // 🧠 Send to host
+      try {
+        await sendMail({
+          email: host.email,
+          subject: "Guest Order Requires Your Assistance - Event Parcel",
+          html: notificationEmail(hostName, selfManagedEmailBody, true),
+        });
 
-    console.log(`📧 Self-managed delivery email sent to host: ${host.email}`);
-  } catch (err) {
-    console.error("❌ Failed to send self-managed delivery email:", err);
-  }
+        console.log(`📧 Self-managed delivery email sent to host: ${host.email}`);
+      } catch (err) {
+        console.error("❌ Failed to send self-managed delivery email:", err);
+      }
 
 
-  // 🧠 Send to co-hosts (if any)
-  if (order?.eventId?.coHosts?.length) {
-    const coHosts = await UserService.getUsersByIds(order.eventId.coHosts);
-    const coHostEmails = coHosts.map(c => c.email).filter(Boolean);
+      // 🧠 Send to co-hosts (if any)
+      if (order?.eventId?.coHosts?.length) {
+        const coHosts = await UserService.getUsersByIds(order.eventId.coHosts);
+        const coHostEmails = coHosts.map(c => c.email).filter(Boolean);
 
-    for (const coHostEmail of coHostEmails) {
-      await sendMail({
-        email: coHostEmail,
-        subject: "Self-Managed Delivery Order Notification",
-        html: notificationEmail(hostName, selfManagedEmailBody,true),
-      });
+        for (const coHostEmail of coHostEmails) {
+          await sendMail({
+            email: coHostEmail,
+            subject: "Self-Managed Delivery Order Notification",
+            html: notificationEmail(hostName, selfManagedEmailBody, true),
+          });
+        }
+      }
+
+      console.log("✅ Self-managed order notification sent to host & co-hosts");
+
+
     }
-  }
-
-  console.log("✅ Self-managed order notification sent to host & co-hosts");
-
-
-}
 
 
     // ✅ Enqueue payout job for host via BullMQ
@@ -646,8 +775,8 @@ if (order.deliveryType === "selfManaged") {
       delay: getNextWorkingDelay(), // 🕒 T+1 logic here
       attempts: 5, // Retry up to 5 times on failure
       backoff: {
-      type: "exponential",
-      delay: 120 * 1000,           // 1 minute base delay
+        type: "exponential",
+        delay: 120 * 1000,           // 1 minute base delay
       },
       removeOnComplete: { count: 100 },
       removeOnFail: { count: 50 },
@@ -670,32 +799,32 @@ if (order.deliveryType === "selfManaged") {
     }
 
     if (order.deliveryType === "pickUp") {
-//       const pickUpEmail1 = `
-// <pre style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
-// Dear ${toTitleCase(order.guestFirstName)} ${toTitleCase(order.guestLastName)},
+      //       const pickUpEmail1 = `
+      // <pre style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
+      // Dear ${toTitleCase(order.guestFirstName)} ${toTitleCase(order.guestLastName)},
 
-// We received your order and we can't wait to see you grace our occasion on the ${order?.eventId?.date} at ${order?.eventId?.time}.
+      // We received your order and we can't wait to see you grace our occasion on the ${order?.eventId?.date} at ${order?.eventId?.time}.
 
-// Please find below pickup details for your parcel.
+      // Please find below pickup details for your parcel.
 
-// Contact Name: ${toTitleCase(order?.pickUpDetails?.contactName || "")}
-// Contact Phone Number: ${order?.pickUpDetails?.contactPhoneNumber}
+      // Contact Name: ${toTitleCase(order?.pickUpDetails?.contactName || "")}
+      // Contact Phone Number: ${order?.pickUpDetails?.contactPhoneNumber}
 
-// PickUp Start Date: ${order?.pickUpDetails?.pickUpStartDate}
-// PickUp Start Time: ${order?.pickUpDetails?.pickUpStartTime} ${order?.pickUpDetails?.pickUpStartTimeZone}
-// PickUp Address: ${toTitleCase(order?.pickUpDetails?.pickUpAddress || "")}
+      // PickUp Start Date: ${order?.pickUpDetails?.pickUpStartDate}
+      // PickUp Start Time: ${order?.pickUpDetails?.pickUpStartTime} ${order?.pickUpDetails?.pickUpStartTimeZone}
+      // PickUp Address: ${toTitleCase(order?.pickUpDetails?.pickUpAddress || "")}
 
-// Please note that you can only pickup your parcel from the stated pickup date (not before).
+      // Please note that you can only pickup your parcel from the stated pickup date (not before).
 
-// With Love,
-// ${toTitleCase(host.firstName)} ${toTitleCase(host.lastName)}
+      // With Love,
+      // ${toTitleCase(host.firstName)} ${toTitleCase(host.lastName)}
 
-// Event Parcel Limited.
-// _____________
-// </pre>
-// `;
+      // Event Parcel Limited.
+      // _____________
+      // </pre>
+      // `;
 
-const pickUpEmail = `
+      const pickUpEmail = `
 <pre style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
 
 Dear ${toTitleCase(order.guestFirstName)} ${toTitleCase(order.guestLastName)},
@@ -723,26 +852,26 @@ Event Parcel Limited.
         html: notificationEmail(((titleCase(`${host.firstName} ${host.lastName}`)) ?? host.email), pickUpEmail, true),
       });
 
-}
+    }
 
-// ✅ Prepare package details for emails
-const packageDetails = order.items
-  .map(
-    (item) =>
-      `${item.packageTitle} × ${item.quantity} = ${formatPrice(
-        item.packagePrice * item.quantity,
-        paymentRecord.currency as "NGN" | "USD"
-      )}`
-  )
-  .join("<br/>");
+    // ✅ Prepare package details for emails
+    const packageDetails = order.items
+      .map(
+        (item) =>
+          `${item.packageTitle} × ${item.quantity} = ${formatPrice(
+            item.packagePrice * item.quantity,
+            paymentRecord.currency as "NGN" | "USD"
+          )}`
+      )
+      .join("<br/>");
 
-// ✅ Prepare admin email body
-const superAdmins = await UserService.getUsers({
-  role: {"$in": ["superAdmin", "admin"]},
-  status: "active",
-});
+    // ✅ Prepare admin email body
+    const superAdmins = await UserService.getUsers({
+      role: { "$in": ["superAdmin", "admin"] },
+      status: "active",
+    });
 
-const adminEmailBody = `
+    const adminEmailBody = `
 <p>Dear Team,</p>
 <p>
 This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName}</strong> has made payments for a package under the Event <strong>${order?.eventId?.eventName || "N/A"}</strong>.
@@ -758,16 +887,15 @@ This is to notify you that <strong>${order.guestFirstName} ${order.guestLastName
 <strong>Delivery Type:</strong> ${order.deliveryType || "N/A"}<br/>
 <strong>Host Name:</strong> ${host.firstName} ${host.lastName}<br/>
 <strong>Event Date/Time:</strong> ${order?.eventId?.date || "N/A"} / ${order?.eventId?.time || "N/A"}<br/>
-<strong>PickUp Start Date/Time:</strong> ${
-  order.pickUpDetails?.pickUpStartDate
-    ? `${order.pickUpDetails.pickUpStartDate} ${order.pickUpDetails.pickUpStartTime || ""}`
-    : "N/A"
-}
+<strong>PickUp Start Date/Time:</strong> ${order.pickUpDetails?.pickUpStartDate
+        ? `${order.pickUpDetails.pickUpStartDate} ${order.pickUpDetails.pickUpStartTime || ""}`
+        : "N/A"
+      }
 </p>
 <p>Regards,<br/>Event Parcel</p>
 `;
 
-console.log(order.eventId)
+    console.log(order.eventId)
 
 
     // Email & Notification
@@ -779,7 +907,7 @@ console.log(order.eventId)
       sendMail({
         email: order.guestEmail,
         subject: "Payment Successful",
-        html: notificationEmail((titleCase(`${order.guestFirstName} ${order.guestLastName}`) ?? order.guestEmail), emailBody,true),
+        html: notificationEmail((titleCase(`${order.guestFirstName} ${order.guestLastName}`) ?? order.guestEmail), emailBody, true),
       }),
 
       // Host email
@@ -789,7 +917,7 @@ console.log(order.eventId)
         html: notificationEmail(
           ((titleCase(`${host.firstName} ${host.lastName}`)) ?? host.email),
           `Your event received a payment of ${formatPrice(paymentRecord.amount, currency as "NGN" | "USD" | undefined)} ${currency}. Reference: ${paymentRecord.paymentReference}`
-        ,true),
+          , true),
       }),
 
       // Host in-app notification
@@ -803,14 +931,14 @@ console.log(order.eventId)
         time: now.toLocaleTimeString(),
       }),
 
-    // Admin emails to all active super admins
-    ...superAdmins.map((admin) =>
-    sendMail({
-      email: admin.email,
-      subject: "Payment Notification",
-      html: notificationEmail("Team", adminEmailBody,true),
-    })
-  ),
+      // Admin emails to all active super admins
+      ...superAdmins.map((admin) =>
+        sendMail({
+          email: admin.email,
+          subject: "Payment Notification",
+          html: notificationEmail("Team", adminEmailBody, true),
+        })
+      ),
     ]);
 
     [guestMail, hostMail, hostNotification, adminEmails].forEach((result, index) => {

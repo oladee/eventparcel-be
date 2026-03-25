@@ -419,3 +419,14 @@ export interface IDeliveryFee {
   baseFee: number;
   multiplier: number;
 }
+
+
+export interface IExchangeRate extends Document {
+  from: string;
+  to: string;
+  rate: number;
+  source?: string;
+  lastFetchedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}

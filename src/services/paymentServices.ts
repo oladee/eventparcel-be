@@ -3,10 +3,59 @@ import * as paypal from "@paypal/checkout-server-sdk";
 import { paypalClient } from "../config/paypalConfig";
 import { PaymentModel } from "../models/paymentModel";
 import { IPayment } from "../interfaces/modelInterface";
+import {
+  INormalizedPaymentEvent,
+  IPaypalCapture,
+  IPaypalCaptureResponse,
+} from "../interfaces/interface";
 import mongoose from "mongoose";
 import { calculateGrowthRate } from "../helpers/helpers";
 
 class PaymentService {
+  private static getFirstPaypalCapture(
+    order: IPaypalCaptureResponse
+  ): IPaypalCapture | undefined {
+    return order.purchase_units?.flatMap(
+      (unit) => unit.payments?.captures ?? []
+    )[0];
+  }
+
+  private static normalizeCapturedPaypalOrder(
+    order: IPaypalCaptureResponse
+  ): INormalizedPaymentEvent {
+    const capture = this.getFirstPaypalCapture(order);
+    const purchaseUnit = order.purchase_units?.[0];
+    const amount = capture?.amount ?? purchaseUnit?.amount;
+
+    if (!capture || !amount) {
+      throw new Error("PayPal capture response is missing captured payment details");
+    }
+
+    return {
+      reference: order.id,
+      amount: parseFloat(amount.value),
+      currency: amount.currency_code,
+      email: order.payer?.email_address ?? "",
+      provider: "paypal",
+      status: capture.status ?? order.status,
+      transfer_code: capture.id,
+      fees: capture.seller_receivable_breakdown?.paypal_fee
+        ? parseFloat(capture.seller_receivable_breakdown.paypal_fee.value)
+        : undefined,
+    };
+  }
+
+  private static async getPaypalOrderDetails(
+    orderId: string
+  ): Promise<IPaypalCaptureResponse> {
+    const request = new paypal.orders.OrdersGetRequest(orderId);
+    const response = (await paypalClient.execute(request)) as {
+      result: IPaypalCaptureResponse;
+    };
+
+    return response.result;
+  }
+
   // Create a new payment record
   static async createPayment(
     orderId: string,
@@ -34,7 +83,7 @@ class PaymentService {
     return await payment.save();
   }
 
-    static async createPaymentNew(
+  static async createPaymentNew(
     orderId: string,
     hostId: string,
     email: string,
@@ -79,7 +128,7 @@ class PaymentService {
       await payment.save();
 
       return {
-        paymentLink: response.data.data.authorization_url, 
+        paymentLink: response.data.data.authorization_url,
         reference: response.data.data.reference,
       }; // Return payment link
 
@@ -87,8 +136,8 @@ class PaymentService {
       console.error("Payment initialization Error: ", error.response?.data);
       throw new Error(
         error.response?.data?.message ||
-          error.message ||
-          "Payment initiation failed"
+        error.message ||
+        "Payment initiation failed"
       );
     }
   }
@@ -149,10 +198,39 @@ class PaymentService {
         paymentLink: approvalUrl,
         reference: order.result.id,
       };
-      
+
     } catch (error: any) {
       console.error("PayPal payment initiation error:", error);
       throw new Error(error.message || "PayPal payment initiation failed");
+    }
+  }
+
+  static async capturePaypalOrder(
+    orderId: string
+  ): Promise<INormalizedPaymentEvent> {
+    try {
+      const request = new paypal.orders.OrdersCaptureRequest(orderId);
+      const response = (await paypalClient.execute(request)) as {
+        result: IPaypalCaptureResponse;
+      };
+
+      return this.normalizeCapturedPaypalOrder(response.result);
+    } catch (error: any) {
+      if (error?.statusCode === 409 || error?.statusCode === 422) {
+        const existingOrder = await this.getPaypalOrderDetails(orderId);
+        const existingCapture = this.getFirstPaypalCapture(existingOrder);
+
+        if (existingCapture) {
+          return this.normalizeCapturedPaypalOrder(existingOrder);
+        }
+      }
+
+      const details = error?.result?.details
+        ?.map((detail: { description?: string }) => detail.description)
+        .filter(Boolean)
+        .join("; ");
+
+      throw new Error(details || error?.message || "PayPal payment capture failed");
     }
   }
 
@@ -202,13 +280,13 @@ class PaymentService {
   // Get Paystack Balance
   static async checkPaystackBalance(currency = "NGN"): Promise<number> {
 
-  const response = await paystack.get(`/balance`);
+    const response = await paystack.get(`/balance`);
 
-  const wallet = response.data?.data?.find((b: any) => b.currency === currency);
-  if (!wallet) throw new Error(`Balance for ${currency} not found`);
+    const wallet = response.data?.data?.find((b: any) => b.currency === currency);
+    if (!wallet) throw new Error(`Balance for ${currency} not found`);
 
-  return wallet.balance; // Balance is in Kobo
-}
+    return wallet.balance;
+  }
 
 
   // Get Payment by ID
@@ -269,65 +347,65 @@ class PaymentService {
     return PaymentModel.countDocuments(filter);
   }
 
-// Get Host Payout By EventId 
-public static async getPaymentSummaryByEventPayout(eventId: string) {
-  const eventObjectId = new mongoose.Types.ObjectId(eventId);
+  // Get Host Payout By EventId 
+  public static async getPaymentSummaryByEventPayout(eventId: string) {
+    const eventObjectId = new mongoose.Types.ObjectId(eventId);
 
-  const pipeline = [
-    {
-      $match: {
-        paymentStatus: "paid"
+    const pipeline = [
+      {
+        $match: {
+          paymentStatus: "paid"
+        }
+      },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "orderId",
+          foreignField: "_id",
+          as: "order"
+        }
+      },
+      { $unwind: "$order" },
+      {
+        $match: {
+          "order.eventId": eventObjectId
+        }
+      },
+      {
+        $group: {
+          _id: "$currency",
+          totalAmount: { $sum: "$amount" },
+          hostShare: { $sum: { $ifNull: ["$hostShare", 0] } },
+          platformFee: { $sum: { $ifNull: ["$platformFee", 0] } },
+          transactionFee: { $sum: { $ifNull: ["$transactionFee", 0] } },
+          tax: { $sum: { $ifNull: ["$order.tax", 0] } },
+          homeDeliveryFee: { $sum: { $ifNull: ["$order.homeDeliveryFee", 0] } },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          currency: "$_id",
+          totalAmount: 1,
+          platformFee: 1,
+          transactionFee: 1,
+          tax: 1,
+          homeDeliveryFee: 1,
+          count: 1,
+          payout: "$hostShare" // hostShare is the payout
+        }
       }
-    },
-    {
-      $lookup: {
-        from: "orders",
-        localField: "orderId",
-        foreignField: "_id",
-        as: "order"
-      }
-    },
-    { $unwind: "$order" },
-    {
-      $match: {
-        "order.eventId": eventObjectId
-      }
-    },
-    {
-      $group: {
-        _id: "$currency",
-        totalAmount: { $sum: "$amount" },
-        hostShare: { $sum: { $ifNull: ["$hostShare", 0] } },
-        platformFee: { $sum: { $ifNull: ["$platformFee", 0] } },
-        transactionFee: { $sum: { $ifNull: ["$transactionFee", 0] } },
-        tax: { $sum: { $ifNull: ["$order.tax", 0] } },
-        homeDeliveryFee: { $sum: { $ifNull: ["$order.homeDeliveryFee", 0] } },
-        count: { $sum: 1 }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        currency: "$_id",
-        totalAmount: 1,
-        platformFee: 1,
-        transactionFee: 1,
-        tax: 1,
-        homeDeliveryFee: 1,
-        count: 1,
-        payout: "$hostShare" // hostShare is the payout
-      }
-    }
-  ];
+    ];
 
-  const result = await PaymentModel.aggregate(pipeline);
-  return result;
-}
+    const result = await PaymentModel.aggregate(pipeline);
+    return result;
+  }
 
 
 
   // Get all Payments using aggregation to filter by order fields
-public static async getAllPaymentsNew2(filter: any = {}, skip = 0, limit = 10): Promise<IPayment[]> {
+  public static async getAllPaymentsNew2(filter: any = {}, skip = 0, limit = 10): Promise<IPayment[]> {
     const matchStage: any = {
       hostId: new mongoose.Types.ObjectId(filter.hostId),
     };
@@ -336,65 +414,65 @@ public static async getAllPaymentsNew2(filter: any = {}, skip = 0, limit = 10): 
       matchStage.paymentStatus = filter.paymentStatus;
     }
 
-  const pipeline: any[] = [
-    // Later in the pipeline
-    {
-      $match: matchStage
-    },
-    // {
-    //   $match: {
-    //     hostId: new mongoose.Types.ObjectId(filter.hostId),
-    //     paymentStatus: filter.paymentStatus ?? '',
-    //   },
-    // },
-    {
-      $lookup: {
-        from: "orders", // Actual collection name, usually lowercase plural
-        localField: "orderId",
-        foreignField: "_id",
-        as: "order",
+    const pipeline: any[] = [
+      // Later in the pipeline
+      {
+        $match: matchStage
       },
-    },
-    {
-      $unwind: "$order",
-    },
-    {
-      $lookup: {
-        from: "events",
-        localField: "order.eventId",
-        foreignField: "_id",
-        as: "order.event",
+      // {
+      //   $match: {
+      //     hostId: new mongoose.Types.ObjectId(filter.hostId),
+      //     paymentStatus: filter.paymentStatus ?? '',
+      //   },
+      // },
+      {
+        $lookup: {
+          from: "orders", // Actual collection name, usually lowercase plural
+          localField: "orderId",
+          foreignField: "_id",
+          as: "order",
+        },
       },
-    },
-    {
-      $unwind: {
-        path: "$order.event",
-        preserveNullAndEmptyArrays: true,
+      {
+        $unwind: "$order",
       },
-    },
-  ];
+      {
+        $lookup: {
+          from: "events",
+          localField: "order.eventId",
+          foreignField: "_id",
+          as: "order.event",
+        },
+      },
+      {
+        $unwind: {
+          path: "$order.event",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ];
 
-  // Optional $match for search
-  if (filter.searchConditions) {
-    pipeline.push({
-      $match: {
-        $or: filter.searchConditions,
-      },
-    });
+    // Optional $match for search
+    if (filter.searchConditions) {
+      pipeline.push({
+        $match: {
+          $or: filter.searchConditions,
+        },
+      });
+    }
+
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit }
+    );
+
+    return PaymentModel.aggregate(pipeline);
   }
 
-  pipeline.push(
-    { $sort: { createdAt: -1 } },
-    { $skip: skip },
-    { $limit: limit }
-  );
 
-  return PaymentModel.aggregate(pipeline);
-}
-
-
-public static async countPaymentsNew2(filter: any): Promise<number> {
-  const matchStage: any = {
+  public static async countPaymentsNew2(filter: any): Promise<number> {
+    const matchStage: any = {
       hostId: new mongoose.Types.ObjectId(filter.hostId),
     };
 
@@ -402,44 +480,44 @@ public static async countPaymentsNew2(filter: any): Promise<number> {
       matchStage.paymentStatus = filter.paymentStatus;
     }
 
-  const pipeline: any[] = [
-    // {
-    //   $match: {
-    //     hostId: new mongoose.Types.ObjectId(filter.hostId),
-    //     paymentStatus: 'paid',
-    //   },
-    // },
-    {
-      $match: matchStage
-    },
-    {
-      $lookup: {
-        from: "orders",
-        localField: "orderId",
-        foreignField: "_id",
-        as: "order",
+    const pipeline: any[] = [
+      // {
+      //   $match: {
+      //     hostId: new mongoose.Types.ObjectId(filter.hostId),
+      //     paymentStatus: 'paid',
+      //   },
+      // },
+      {
+        $match: matchStage
       },
-    },
-    {
-      $unwind: "$order",
-    },
-  ];
+      {
+        $lookup: {
+          from: "orders",
+          localField: "orderId",
+          foreignField: "_id",
+          as: "order",
+        },
+      },
+      {
+        $unwind: "$order",
+      },
+    ];
 
-  if (filter.searchConditions) {
+    if (filter.searchConditions) {
+      pipeline.push({
+        $match: {
+          $or: filter.searchConditions,
+        },
+      });
+    }
+
     pipeline.push({
-      $match: {
-        $or: filter.searchConditions,
-      },
+      $count: "total",
     });
+
+    const result = await PaymentModel.aggregate(pipeline);
+    return result[0]?.total || 0;
   }
-
-  pipeline.push({
-    $count: "total",
-  });
-
-  const result = await PaymentModel.aggregate(pipeline);
-  return result[0]?.total || 0;
-}
 
 
 
@@ -475,11 +553,13 @@ public static async countPaymentsNew2(filter: any): Promise<number> {
                     $subtract: [
                       "$order.totalAmount",
                       // { $add: ["$order.tax", "$order.homeDeliveryFee"] }
-                      { $add: [
-                        { $ifNull: ["$order.tax", 0] },
-                        { $ifNull: ["$order.homeDeliveryFee", 0] }
-                      ]}
-                    ],  
+                      {
+                        $add: [
+                          { $ifNull: ["$order.tax", 0] },
+                          { $ifNull: ["$order.homeDeliveryFee", 0] }
+                        ]
+                      }
+                    ],
                   },
                 }
               },
@@ -591,11 +671,11 @@ public static async countPaymentsNew2(filter: any): Promise<number> {
     return result.length
       ? result[0]
       : {
-          summaryByCurrency: {
-            NGN: { netSales: 0, overallSales: 0 },
-            USD: { netSales: 0, overallSales: 0 },
-          },
-        };
+        summaryByCurrency: {
+          NGN: { netSales: 0, overallSales: 0 },
+          USD: { netSales: 0, overallSales: 0 },
+        },
+      };
   }
 
   // Get all payment history summary
@@ -929,161 +1009,161 @@ public static async countPaymentsNew2(filter: any): Promise<number> {
       },
     };
 
-const pipeline = [
-  {
-    $facet: {
-      allTime: [
-        { $match: { paymentStatus: "paid" } },
-        {
-          $lookup: {
-            from: "orders",
-            localField: "orderId",
-            foreignField: "_id",
-            as: "order",
-          },
-        },
-        { $unwind: "$order" },
-        {
-          $group: {
-            _id: "$currency",
-            netSales: { $sum: "$amount" },
-            deliveryFee: { $sum: "$order.homeDeliveryFee" },
-            transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
-            serviceFee: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$currency", "NGN"] },
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.07 ]},
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.085 ]}
-                ]
-              }
+    const pipeline = [
+      {
+        $facet: {
+          allTime: [
+            { $match: { paymentStatus: "paid" } },
+            {
+              $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "order",
+              },
             },
-            overallSales: { $sum: "$order.totalAmount" },
-          },
+            { $unwind: "$order" },
+            {
+              $group: {
+                _id: "$currency",
+                netSales: { $sum: "$amount" },
+                deliveryFee: { $sum: "$order.homeDeliveryFee" },
+                transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
+                serviceFee: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$currency", "NGN"] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.07] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.085] }
+                    ]
+                  }
+                },
+                overallSales: { $sum: "$order.totalAmount" },
+              },
+            },
+          ],
+          thisWeek: [
+            { $match: thisWeekMatch },
+            {
+              $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "order",
+              },
+            },
+            { $unwind: "$order" },
+            {
+              $group: {
+                _id: "$currency",
+                netSales: { $sum: "$amount" },
+                deliveryFee: { $sum: "$order.homeDeliveryFee" },
+                transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
+                serviceFee: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$currency", "NGN"] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.07] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.085] }
+                    ]
+                  }
+                },
+                overallSales: { $sum: "$order.totalAmount" },
+              },
+            },
+          ],
+          lastWeek: [
+            { $match: lastWeekMatch },
+            {
+              $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "order",
+              },
+            },
+            { $unwind: "$order" },
+            {
+              $group: {
+                _id: "$currency",
+                netSales: { $sum: "$amount" },
+                deliveryFee: { $sum: "$order.homeDeliveryFee" },
+                transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
+                serviceFee: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$currency", "NGN"] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.07] },
+                      { $multiply: [{ $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] }] }, 0.085] }
+                    ]
+                  }
+                },
+                overallSales: { $sum: "$order.totalAmount" },
+              },
+            },
+          ],
         },
-      ],
-      thisWeek: [
-        { $match: thisWeekMatch },
-        {
-          $lookup: {
-            from: "orders",
-            localField: "orderId",
-            foreignField: "_id",
-            as: "order",
-          },
-        },
-        { $unwind: "$order" },
-        {
-          $group: {
-            _id: "$currency",
-            netSales: { $sum: "$amount" },
-            deliveryFee: { $sum: "$order.homeDeliveryFee" },
-            transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
-            serviceFee: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$currency", "NGN"] },
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.07 ]},
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.085 ]}
-                ]
-              }
-            }, 
-            overallSales: { $sum: "$order.totalAmount" },
-          },
-        },
-      ],
-      lastWeek: [
-        { $match: lastWeekMatch },
-        {
-          $lookup: {
-            from: "orders",
-            localField: "orderId",
-            foreignField: "_id",
-            as: "order",
-          },
-        },
-        { $unwind: "$order" },
-        {
-          $group: {
-            _id: "$currency",
-            netSales: { $sum: "$amount" },
-            deliveryFee: { $sum: "$order.homeDeliveryFee" },
-            transactionFee: { $sum: "$transactionFee" }, // Sum of transaction fees (if needed)
-            serviceFee: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$currency", "NGN"] },
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.07 ]},
-                  { $multiply: [ { $subtract: ["$amount", { $add: ["$order.homeDeliveryFee", "$transactionFee"] } ]}, 0.085 ]}
-                ]
-              }
-            }, 
-            overallSales: { $sum: "$order.totalAmount" },
-          },
-        },
-      ],
-    },
-  },
-];
+      },
+    ];
 
 
-const result = await PaymentModel.aggregate(pipeline);
+    const result = await PaymentModel.aggregate(pipeline);
 
-interface CurrencyData {
-  _id: string;
-  netSales: number;
-  netPayout?: number;
-  deliveryFee: number;
-  serviceFee: number;
-  overallSales: number;
-}
-
-function getByCurrency(data: CurrencyData[], currency: string): CurrencyData {
-  return (
-    data.find((x) => x._id === currency) || {
-      _id: currency,
-      netSales: 0,
-      deliveryFee: 0,
-      serviceFee: 0,
-      overallSales: 0,
-      netPayout: 0,
+    interface CurrencyData {
+      _id: string;
+      netSales: number;
+      netPayout?: number;
+      deliveryFee: number;
+      serviceFee: number;
+      overallSales: number;
     }
-  );
-}
 
-const currencies = ["NGN", "USD"];
-const summaryByCurrency: Record<
-  string,
-  {
-    netSales: number;
-    netPayout?: number;
-    netSalesChange: number;
-    deliveryFee: number;
-    deliveryFeeChange: number;
-    serviceFee: number;
-    serviceFeeChange: number;
-    overallSales: number;
-  }
-> = {};
+    function getByCurrency(data: CurrencyData[], currency: string): CurrencyData {
+      return (
+        data.find((x) => x._id === currency) || {
+          _id: currency,
+          netSales: 0,
+          deliveryFee: 0,
+          serviceFee: 0,
+          overallSales: 0,
+          netPayout: 0,
+        }
+      );
+    }
 
-currencies.forEach((currency) => {
-  const all = getByCurrency(result[0].allTime, currency);
-  const current = getByCurrency(result[0].thisWeek, currency);
-  const previous = getByCurrency(result[0].lastWeek, currency);
+    const currencies = ["NGN", "USD"];
+    const summaryByCurrency: Record<
+      string,
+      {
+        netSales: number;
+        netPayout?: number;
+        netSalesChange: number;
+        deliveryFee: number;
+        deliveryFeeChange: number;
+        serviceFee: number;
+        serviceFeeChange: number;
+        overallSales: number;
+      }
+    > = {};
 
-  summaryByCurrency[currency] = {
-    netSales: all.netSales,
-    netSalesChange: calculateGrowthRate(current.netSales, previous.netSales),
-    deliveryFee: all.deliveryFee,
-    deliveryFeeChange: calculateGrowthRate(current.deliveryFee, previous.deliveryFee),
-    serviceFee: all.serviceFee,
-    serviceFeeChange: calculateGrowthRate(current.serviceFee, previous.serviceFee),
-    overallSales: all.overallSales,
-    netPayout: all.overallSales - (all.deliveryFee + all.serviceFee),
-  };
-});
+    currencies.forEach((currency) => {
+      const all = getByCurrency(result[0].allTime, currency);
+      const current = getByCurrency(result[0].thisWeek, currency);
+      const previous = getByCurrency(result[0].lastWeek, currency);
 
-return { summaryByCurrency };
+      summaryByCurrency[currency] = {
+        netSales: all.netSales,
+        netSalesChange: calculateGrowthRate(current.netSales, previous.netSales),
+        deliveryFee: all.deliveryFee,
+        deliveryFeeChange: calculateGrowthRate(current.deliveryFee, previous.deliveryFee),
+        serviceFee: all.serviceFee,
+        serviceFeeChange: calculateGrowthRate(current.serviceFee, previous.serviceFee),
+        overallSales: all.overallSales,
+        netPayout: all.overallSales - (all.deliveryFee + all.serviceFee),
+      };
+    });
+
+    return { summaryByCurrency };
 
   }
 

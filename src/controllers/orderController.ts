@@ -17,7 +17,7 @@ import { NotificationService } from "../services/notificationServices";
 import { ref } from "@hapi/joi";
 import { OptionalAuthenticateRequest } from "../middleware/optionalAuthenticate";
 import ActivityLogService from "../services/activityLogService";
-import { computeDeliveryFee, convertNgnToUsd, formatPrice, hasPlatformHomeDelivery, hasPlatformHomeDelivery2, stripCountryCode, titleCase, toTitleCase } from "../helpers/helpers";
+import { computeDeliveryFee, convertNgnToUsd, convertUsdToNgn, formatPrice, hasPlatformHomeDelivery, hasPlatformHomeDelivery2, stripCountryCode, titleCase, toTitleCase } from "../helpers/helpers";
 import { sendMail } from "../utils/emailHandler/email";
 import { notificationEmail } from "../utils/emailHandler/notificationEmailTemplate";
 
@@ -888,6 +888,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         let totalAmount = 0;
         let packageDetails: IOrderItem[] = [];
         let eventPackages: IPackage[] = [];
+        let orderCurrency: "NGN" | "USD" | null = null;
 
         for (const pkg of items) {
             const { packageId, quantity, deliveryMethod } = pkg;
@@ -913,7 +914,30 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
                 );
             }
 
-            totalAmount += eventPackage.packagePrice * quantity;
+            const packageCurrency = (eventPackage.packagePriceCurrency || "").toUpperCase();
+            if (!["NGN", "USD"].includes(packageCurrency)) {
+                return ErrorHandler.badUserInput(
+                    res,
+                    "Unsupported package currency. Only NGN and USD are allowed."
+                );
+            }
+            console.log(`Package ${eventPackage.packageTitle} currency: ${packageCurrency}`);
+            if (!orderCurrency) {
+                orderCurrency = packageCurrency as "NGN" | "USD";
+            }
+
+            let normalizedPackagePrice = eventPackage.packagePrice;
+            let normalizedPackageCurrency = packageCurrency as "NGN" | "USD";
+
+            if (orderCurrency === "USD" && packageCurrency === "NGN") {
+                normalizedPackagePrice = await convertNgnToUsd(eventPackage.packagePrice);
+                normalizedPackageCurrency = "USD";
+            } else if (orderCurrency === "NGN" && packageCurrency === "USD") {
+                normalizedPackagePrice = await convertUsdToNgn(eventPackage.packagePrice);
+                normalizedPackageCurrency = "NGN";
+            }
+
+            totalAmount += normalizedPackagePrice * quantity;
 
             packageDetails.push({
                 packageId: new mongoose.Types.ObjectId(eventPackage._id),
@@ -921,8 +945,8 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
                 packageImgPublicIds: eventPackage.packageImgPublicIds,
                 packageTitle: eventPackage.packageTitle,
                 packageDescription: eventPackage.packageDescription,
-                packagePriceCurrency: eventPackage.packagePriceCurrency,
-                packagePrice: eventPackage.packagePrice,
+                packagePriceCurrency: normalizedPackageCurrency,
+                packagePrice: normalizedPackagePrice,
                 quantity: Number(quantity),
                 deliveryMethod: deliveryMethod || null,
                 packageDeliveryType: eventPackage.packageDelivery,
@@ -932,7 +956,10 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             eventPackages.push(eventPackage);
         }
 
-        const orderCurrency = packageDetails[0].packagePriceCurrency;
+        if (!orderCurrency) {
+            return ErrorHandler.badUserInput(res, "Unable to determine order currency.");
+        }
+
         let homeDeliveryFee = 0;
         let pickUpDetails;
 
@@ -1022,6 +1049,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         };
 
         const deliveryFee = Number(newHomeDeliveryFeeByCurrency) || 0;
+        console.log("Delivery Fee for Order: ", deliveryFee);
         const MIN_PLATFORM_MARGIN = getMinimumPlatformMargin(orderCurrency);
         const estimatedTransactionFee = estimateTransactionFee(totalAmount, orderCurrency);
 
