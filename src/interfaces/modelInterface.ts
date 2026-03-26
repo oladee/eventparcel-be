@@ -171,6 +171,7 @@ export interface IPackage extends Document {
   packageQuantity?: number;
   packageDelivery: string[];
   packageSize?: number;
+  packageStatus?: "draft" | "active" | "archived" | "deleted";
   isDraft?: boolean;
 }
 

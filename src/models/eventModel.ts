@@ -238,7 +238,12 @@ const PackageSchema: Schema = new Schema(
     packageSize: {
       type: Number,
       // enum: ["smallBox", "mediumBox", "largeBox", "extraLargeBox" ]
-    }, 
+    },
+    packageStatus: {
+      type: String,
+      enum: ["draft", "active", "archived", "deleted"],
+      default: "draft",
+    },
     isDraft: {
       type: Boolean,
       default: false,

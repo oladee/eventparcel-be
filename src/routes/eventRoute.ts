@@ -75,10 +75,10 @@ router.get("/clone-group/:eventGroupId", cloneEventGroup);
 router.post("/add-package", optionalAuthenticate, upload.array('packageImgUrls', 4), createPackage);
 
 // View a particular Event Package
-router.get("/view-package/:packageId", viewPackage);
+router.get("/view-package/:packageId", optionalAuthenticate, viewPackage);
 
 // View all Event Packages for a particular Event Group
-router.get("/view-packages/:eventGroupId", viewAllPackages);
+router.get("/view-packages/:eventGroupId", optionalAuthenticate, viewAllPackages);
 
 // View all Event Packages by an Admin
 router.get("/view-all-packages", authenticate, viewAllPackageByAdmin);

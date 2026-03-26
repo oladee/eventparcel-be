@@ -1751,6 +1751,7 @@ export const createPackage = async (
     }
 
     const packageWeight = packageSizeWeight[packageSize as keyof typeof packageSizeWeight];
+    const normalizedPackageStatus = (isDraft ? "draft" : "active");
 
     // Create Package
     const eventPackage = await PackageService.createPackage({
@@ -1765,6 +1766,7 @@ export const createPackage = async (
       packageImgPublicIds, // Array of public IDs
       packageSize: packageWeight,
       isDraft,
+      packageStatus: normalizedPackageStatus,
     });
 
     // Now we push it inside the eventGroup for reference
@@ -1822,9 +1824,38 @@ export const createPackage = async (
   }
 };
 
+const toObjectIdString = (value: any): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Types.ObjectId) return value.toString();
+  if (typeof value === "object" && value._id) {
+    return value._id.toString();
+  }
+
+  return null;
+};
+
+const canManageEventPackage = (req: OptionalAuthenticateRequest, event: any): boolean => {
+  const { userId } = req.user || {};
+  if (!userId) return false;
+
+  const requesterId = userId.toString();
+  const eventOwnerId = toObjectIdString(event?.user);
+
+  if (eventOwnerId === requesterId) {
+    return true;
+  }
+
+  const coHostIds = Array.isArray(event?.coHost)
+    ? event.coHost.map((coHost: any) => toObjectIdString(coHost)).filter(Boolean)
+    : [];
+
+  return coHostIds.includes(requesterId);
+};
+
 // Function to view a particular package
 export const viewPackage = async (
-  req: Request,
+  req: OptionalAuthenticateRequest,
   res: Response
 ): Promise<Response | undefined> => {
   try {
@@ -1835,6 +1866,38 @@ export const viewPackage = async (
 
     const EventPackage = await PackageService.getPackageById(packageId);
     if (!EventPackage) {
+      return ErrorHandler.notFound(res, "Event Package not found!");
+    }
+
+    const packageStatus = EventPackage.packageStatus || "active";
+
+    if (packageStatus === "deleted") {
+      return ErrorHandler.notFound(res, "Event Package not found!");
+    }
+
+    const eventGroupId = toObjectIdString(EventPackage.eventGroup);
+    if (!eventGroupId) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
+    if (!eventGroup) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventId = toObjectIdString((eventGroup as IEventGroup).event);
+    if (!eventId) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const event = await EventService.getEventById(eventId);
+    if (!event) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const canViewArchived = canManageEventPackage(req, event);
+
+    if (packageStatus === "archived" && !canViewArchived) {
       return ErrorHandler.notFound(res, "Event Package not found!");
     }
 
@@ -1859,7 +1922,7 @@ export const viewPackage = async (
 
 // Function to view all Packages by a user
 export const viewAllPackages = async (
-  req: Request,
+  req: OptionalAuthenticateRequest,
   res: Response
 ): Promise<Response | undefined> => {
   try {
@@ -1868,9 +1931,32 @@ export const viewAllPackages = async (
       return ErrorHandler.notFound(res, "Event GroupId not provided");
     }
 
-    const eventPackages = await PackageService.getPackages({
+    const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
+    if (!eventGroup) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventId = toObjectIdString((eventGroup as IEventGroup).event);
+    if (!eventId) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const event = await EventService.getEventById(eventId);
+    if (!event) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const canViewArchived = canManageEventPackage(req, event);
+
+    const packageFilter: Record<string, any> = {
       eventGroup: eventGroupId,
-    });
+    };
+
+    packageFilter.$or = canViewArchived
+      ? [{ packageStatus: { $exists: false } }, { packageStatus: { $ne: "deleted" } }]
+      : [{ packageStatus: { $exists: false } }, { packageStatus: { $nin: ["archived", "deleted"] } }];
+
+    const eventPackages = await PackageService.getPackages(packageFilter);
     if (!eventPackages.length) {
       return sendResponse(res, 200, "No event packages found!", []);
     }
@@ -1900,7 +1986,9 @@ export const viewAllPackageByAdmin = async (
   res: Response
 ): Promise<Response | undefined> => {
   try {
-    const eventPackages = await PackageService.getPackages();
+    const eventPackages = await PackageService.getPackages({
+      $or: [{ packageStatus: { $exists: false } }, { packageStatus: { $ne: "deleted" } }],
+    });
     if (!eventPackages.length) {
       return sendResponse(res, 200, "No event packages found!", []);
     }
@@ -2081,12 +2169,46 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
       publicIdsToReplace,
       packageSize,
       isDraft,
+      packageStatus,
     } = req.body;
+
+    const { userId, role } = req.user || {};
+    if (!userId) {
+      return ErrorHandler.unauthorized(res, "Unauthorized user.");
+    }
 
     // Find the existing package
     const existingPackage = await PackageService.getPackageById(packageId);
     if (!existingPackage) {
       return ErrorHandler.notFound(res, "Package not found!");
+    }
+
+    if ((existingPackage.packageStatus || "active") === "deleted") {
+      return ErrorHandler.notFound(res, "Package not found!");
+    }
+
+    const eventGroupId = toObjectIdString(existingPackage.eventGroup);
+    if (!eventGroupId) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
+    if (!eventGroup) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventId = toObjectIdString((eventGroup as IEventGroup).event);
+    if (!eventId) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const event = await EventService.getEventById(eventId);
+    if (!event) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    if (!canManageEventPackage(req, event)) {
+      return ErrorHandler.forbidden(res, "Only the host or event cohost can update this package.");
     }
 
     // Check if the new title already exists (excluding the current package)
@@ -2177,50 +2299,37 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
     //   packageDeliveryArranged = ["pickUp"];
     // }
 
-    let packageDeliveryArranged: string[] = [];
+    let packageDeliveryArranged = existingPackage.packageDelivery;
 
-    console.log("Package Delivery: ", packageDelivery);
+    if (packageDelivery) {
+      const arrangeDelivery = packageDelivery
+        .split(",")
+        .map((str: string) => str.trim());
 
-    const arrangeDelivery = packageDelivery
-      .split(",")
-      .map((str: string) => str.trim());
-
-    // Validation: no duplicate delivery options
-    const uniqueDelivery = new Set(arrangeDelivery);
-    if (uniqueDelivery.size !== arrangeDelivery.length) {
-      return ErrorHandler.badUserInput(res, "Duplicate delivery options are not allowed.");
-    }
-
-    // Validation: Only one of selfManaged or platformDelivery
-    const hasSelfManaged = arrangeDelivery.includes("selfManaged");
-    const hasPlatformDelivery = arrangeDelivery.includes("platformDelivery");
-
-    if (hasSelfManaged && hasPlatformDelivery) {
-      return ErrorHandler.badUserInput(res, "You cannot select both Self-delivery and Platform Delivery in the same package.");
-    }
-
-    // Validation: Platform Delivery disabled for dollar-based groups
-    const eventGroup = await EventGroupService.getEventGroupById(existingPackage?.eventGroup as any);
-    if (!eventGroup) {
-      return ErrorHandler.notFound(res, "Event Group not found!");
-    }
-    if (eventGroup.groupCurrency === "USD" && hasPlatformDelivery) {
-      return ErrorHandler.badUserInput(res, "Platform Delivery is not available for dollar-based groups.");
-    }
-
-    // Validate allowed options
-    const allowedOptions = ["selfManaged", "platformDelivery", "pickUp"];
-    for (const delivery of arrangeDelivery) {
-      if (!allowedOptions.includes(delivery)) {
-        return ErrorHandler.badUserInput(res, `Invalid delivery option: ${delivery}`);
+      const uniqueDelivery = new Set(arrangeDelivery);
+      if (uniqueDelivery.size !== arrangeDelivery.length) {
+        return ErrorHandler.badUserInput(res, "Duplicate delivery options are not allowed.");
       }
-    }
 
-    packageDeliveryArranged = arrangeDelivery;
+      const hasSelfManaged = arrangeDelivery.includes("selfManaged");
+      const hasPlatformDelivery = arrangeDelivery.includes("platformDelivery");
 
-    // Validate packageDelivery input
-    if (!packageDelivery) {
-      return ErrorHandler.badUserInput(res, "At least one delivery option must be selected.");
+      if (hasSelfManaged && hasPlatformDelivery) {
+        return ErrorHandler.badUserInput(res, "You cannot select both Self-delivery and Platform Delivery in the same package.");
+      }
+
+      if (eventGroup.groupCurrency === "USD" && hasPlatformDelivery) {
+        return ErrorHandler.badUserInput(res, "Platform Delivery is not available for dollar-based groups.");
+      }
+
+      const allowedOptions = ["selfManaged", "platformDelivery", "pickUp"];
+      for (const delivery of arrangeDelivery) {
+        if (!allowedOptions.includes(delivery)) {
+          return ErrorHandler.badUserInput(res, `Invalid delivery option: ${delivery}`);
+        }
+      }
+
+      packageDeliveryArranged = arrangeDelivery;
     }
 
 
@@ -2256,18 +2365,19 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
 
     // packageDeliveryArranged = uniqueDelivery;
 
-    // Update event flags
-    const event = await EventService.getEventById((eventGroup as IEventGroup).event._id);
-    if (!event) {
-      return ErrorHandler.notFound(res, "Event not found!");
-    }
-
     event.isPickUp = packageDeliveryArranged.includes("pickUp");
     event.isSelfManaged = packageDeliveryArranged.includes("selfManaged");
     event.isPlatformDelivery = packageDeliveryArranged.includes("platformDelivery");
     await event.save();
 
     const packageWeight = packageSizeWeight[packageSize as keyof typeof packageSizeWeight];
+    const normalizedPackageStatus =
+      packageStatus ||
+      (isDraft === true
+        ? "draft"
+        : isDraft === false
+          ? "active"
+          : existingPackage.packageStatus || (existingPackage.isDraft ? "draft" : "active"));
 
     const packageData = {
       packageTitle: packageTitle ? packageTitle.toLowerCase() : existingPackage.packageTitle,
@@ -2278,7 +2388,8 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
       packageSize: packageWeight || existingPackage.packageSize,
       packageImgUrls,
       packageImgPublicIds,
-      isDraft: false,
+      packageStatus: normalizedPackageStatus,
+      isDraft: normalizedPackageStatus === "draft",
     };
 
     // Update package details
@@ -2287,13 +2398,12 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
       return ErrorHandler.validationError(res, "Unable to update package data!");
     }
 
-    const { userId, role } = req.user || {};
     if (req.user && userId && role === "cohost") {
       // ✅ Log activity for updating Event Package
       await ActivityLogService.logActivity({
         user: userId,
         event: (updatedPackage.eventGroup as IEventGroup).event._id,
-        group: existingPackage.eventGroup._id.toString(),
+        group: eventGroup._id.toString(),
         action: "Updated a Package",
         actionType: "Group",
         entity: toTitleCase(packageTitle || existingPackage.packageTitle),
@@ -2301,7 +2411,7 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
           (updatedPackage.eventGroup as IEventGroup).groupName
         ),
         meta: {
-          eventGroupID: existingPackage.eventGroup._id,
+          eventGroupID: eventGroup._id,
           packageId: updatedPackage._id,
           description:
             packageDescription || existingPackage.packageDescription || "NA",
@@ -2342,6 +2452,11 @@ export const deletePackage = async (
       return ErrorHandler.notFound(res, "packageId not provided!");
     }
 
+    const { userId, role } = req.user || {};
+    if (!userId) {
+      return ErrorHandler.unauthorized(res, "Unauthorized user.");
+    }
+
     // if (!groupId) {
     //     return ErrorHandler.notFound(res, "groupId not provided!")
     // }
@@ -2351,8 +2466,38 @@ export const deletePackage = async (
       return ErrorHandler.notFound(res, "Event Package not found!");
     }
 
-    const deletedEventPackage = await PackageService.deletePackageById(
-      packageId
+    if ((eventPackage.packageStatus || "active") === "deleted") {
+      return ErrorHandler.notFound(res, "Event Package not found!");
+    }
+
+    const eventGroupId = toObjectIdString(eventPackage.eventGroup);
+    if (!eventGroupId) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
+    if (!eventGroup) {
+      return ErrorHandler.notFound(res, "Event Group not found!");
+    }
+
+    const eventId = toObjectIdString((eventGroup as IEventGroup).event);
+    if (!eventId) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    const event = await EventService.getEventById(eventId);
+    if (!event) {
+      return ErrorHandler.notFound(res, "Event not found!");
+    }
+
+    if (!canManageEventPackage(req, event)) {
+      return ErrorHandler.forbidden(res, "Only the host or event cohost can delete this package.");
+    }
+
+    const deletedEventPackage = await PackageService.updatePackageById(
+      packageId,
+      { packageStatus: "deleted", isDraft: false },
+      true
     );
     if (!deletedEventPackage) {
       return ErrorHandler.validationError(
@@ -2367,13 +2512,12 @@ export const deletePackage = async (
     //     return ErrorHandler.validationError(res, "Unable to delete event package data from Event group!");
     // }
 
-    const { userId, role } = req.user || {};
     if (req.user && userId && role === "cohost") {
       // ✅ Log activity for updating Event Package
       await ActivityLogService.logActivity({
         user: userId,
         event: (deletedEventPackage.eventGroup as IEventGroup).event._id,
-        group: eventPackage.eventGroup._id.toString(),
+        group: eventGroup._id.toString(),
         action: "Deleted a Package",
         actionType: "Group",
         entity: toTitleCase(deletedEventPackage.packageTitle),
@@ -2381,7 +2525,7 @@ export const deletePackage = async (
           (deletedEventPackage.eventGroup as IEventGroup).groupName
         ),
         meta: {
-          eventGroupID: eventPackage.eventGroup._id,
+          eventGroupID: eventGroup._id,
           packageId: deletedEventPackage._id,
           description: deletedEventPackage.packageDescription || "NA",
           price: deletedEventPackage.packagePrice,

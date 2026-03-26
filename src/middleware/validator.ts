@@ -503,6 +503,9 @@ const validatePackage = (data: IPackage): ValidationResult => {
     packageSize: Joi.string().valid("smallBox", "mediumBox", "largeBox", "extraLargeBox").optional().empty('').messages({
       'any.only': 'Package size must be either "Small Box", "Medium Box", "Large Box", or "Extra Large Box"',
     }),
+    packageStatus: Joi.string().valid("draft", "active", "archived", "deleted").optional().messages({
+      'any.only': 'Package status must be either "draft", "active", "archived" or "deleted"',
+    }),
     isDraft: Joi.boolean().default(false),
   });
 
@@ -563,6 +566,9 @@ const validateUpdatedPackage = (data: IPackage): ValidationResult => {
     }),
     packageImgUrls: Joi.array().items(Joi.string()).optional(),
     publicIdsToReplace: Joi.string().optional(),
+    packageStatus: Joi.string().valid("draft", "active", "archived", "deleted").optional().messages({
+      'any.only': 'Package status must be either "draft", "active", "archived" or "deleted"',
+    }),
     isDraft: Joi.boolean().default(false),
   });
 
