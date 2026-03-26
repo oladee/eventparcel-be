@@ -8,7 +8,9 @@
     "dev": "nodemon server.ts",
     "build": "tsc",
     "clean": "rimraf dist .cache/ts-node",
-    "clean:tsnode": "rimraf %USERPROFILE%\\.cache\\ts-node"
+    "clean:tsnode": "rimraf %USERPROFILE%\\.cache\\ts-node",
+    "replay:paypal:capture": "ts-node src/cron-job/replayMissedPaypalCaptureJob.ts",
+    "replay:paypal:capture:dry": "ts-node src/cron-job/replayMissedPaypalCaptureJob.ts --dry-run"
   },
   "engines": {
     "node": ">=20.0.0 <21"

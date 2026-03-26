@@ -841,7 +841,6 @@ PickUp Address: ${toTitleCase(order?.pickUpDetails?.pickUpAddress || "")}
 Please note that you are responsible for contacting the person listed above and handling the pickup or delivery fees for your parcel. Also, your parcel will only be available for pickup starting from the stated pickup date, not before.
 
 With Love,
-${toTitleCase(host.firstName)} ${toTitleCase(host.lastName)}
 Event Parcel Limited.
 </pre>
 `;
