@@ -129,10 +129,12 @@ app.use(
   session({
     secret: process.env.JWT_SECRET as string,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     store: MongoStore.create({
       mongoUrl: process.env.MONGO_URI as string, // Your MongoDB connection string
       collectionName: "sessions",
+      autoRemove: "interval",
+      autoRemoveInterval: 10,
     }),
     cookie: { secure: process.env.NODE_ENV === "production" },
   })

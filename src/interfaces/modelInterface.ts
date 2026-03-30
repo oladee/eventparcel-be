@@ -253,6 +253,7 @@ export interface IOrder extends Document {
   eventGroupId: Types.ObjectId | any;
   items: IOrderItem[];
   discountCode: string;
+  itemTotal: number;
   totalAmount: number;
   totalAmountCurrency: "USD" | "NGN";
   shippingAddress: string;
@@ -263,6 +264,8 @@ export interface IOrder extends Document {
   dispatchType: string;
   deliveryType: string;
   homeDeliveryFee: number | undefined;
+  discount: number | undefined;
+  txnFee: number | undefined;
   tax: number;
   trackingId?: string | undefined;
   trackingUrl?: string;

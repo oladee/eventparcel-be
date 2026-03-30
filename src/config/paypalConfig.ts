@@ -9,6 +9,9 @@
 
 import * as paypalSdk from "@paypal/checkout-server-sdk";
 import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 // Environment detection
 const isProd = process.env.NODE_ENV === "production";

@@ -886,6 +886,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         if (!hostDetails) return ErrorHandler.notFound(res, "Host details not found!");
 
         let totalAmount = 0;
+        let itemTotal = 0;
         let packageDetails: IOrderItem[] = [];
         let eventPackages: IPackage[] = [];
         let orderCurrency: "NGN" | "USD" | null = null;
@@ -955,6 +956,8 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
 
             eventPackages.push(eventPackage);
         }
+
+        itemTotal = totalAmount; // Store the original item total before adding fees and taxes
 
         if (!orderCurrency) {
             return ErrorHandler.badUserInput(res, "Unable to determine order currency.");
@@ -1054,7 +1057,8 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         const estimatedTransactionFee = estimateTransactionFee(totalAmount, orderCurrency);
 
         const VAT_tax = Number((totalAmount * taxRate).toFixed(2)) || 0;
-        totalAmount += VAT_tax + Number(newHomeDeliveryFeeByCurrency);
+        
+        totalAmount += VAT_tax + Number(newHomeDeliveryFeeByCurrency) + estimatedTransactionFee;
 
         if (
             totalAmount <
@@ -1083,6 +1087,8 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             city,
             dispatchType,
             homeDeliveryFee: newHomeDeliveryFeeByCurrency || undefined,
+            txnFee: estimatedTransactionFee,
+            itemTotal, // Original package total before fees and taxes
             deliveryType,
             tax: VAT_tax,
             paymentStatus: "pending",
@@ -1099,7 +1105,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
 
         const orderResponse = {
             ...order.toObject(), // Convert mongoose document to plain object
-            itemTotal: totalAmount - (VAT_tax + (homeDeliveryFee ?? 0)), // Original package amount
+            itemTotal, // Original package amount
             deliveryFee: homeDeliveryFee ?? 0,
             subtotal: totalAmount - (homeDeliveryFee ?? 0), // Total after discount but before delivery fee
             grandTotal: totalAmount
@@ -1151,7 +1157,7 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
             return ErrorHandler.badUserInput(res, "Unable to process payment at this time. Please try again.");
         }
 
-        const { totalAmount, homeDeliveryFee, tax, totalAmountCurrency, eventGroupId, eventId, guestFirstName, guestLastName, guestEmail, guestPhoneNumber, shippingAddress, addressLatitude, addressLongitude, city, state, dispatchType, items } = order;
+        const { totalAmount, homeDeliveryFee, tax, totalAmountCurrency, eventGroupId, eventId, guestFirstName, guestLastName, guestEmail, guestPhoneNumber,txnFee, shippingAddress, addressLatitude, addressLongitude, city, state, dispatchType, items, itemTotal } = order;
 
         let newTotalAmount = totalAmount;
         // console.log("Initial Total Amount: ", newTotalAmount);
@@ -1189,7 +1195,7 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
             }
 
             // Before applying the discount, deduct the tax and homeDeliveryFee so we apply the discount to the package not the total including the tax and home delivery fee
-            const totalPackageAmount = totalAmount - (tax + (homeDeliveryFee ?? 0));
+            const totalPackageAmount =itemTotal;
 
             if (discount.discountValueType === "percentage") {
                 discountAmount = (discount.discountValue / 100) * totalPackageAmount;
@@ -1211,7 +1217,7 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
             // console.log("New Tax after Discount: ", newTax);
 
             // Update the new total amount
-            newTotalAmount = amountAfterDiscount + newTax + (homeDeliveryFee ?? 0);
+            newTotalAmount = amountAfterDiscount + newTax + (homeDeliveryFee ?? 0) +(txnFee ?? 0);
 
             // Prevent negative total
             if (newTotalAmount < 0) newTotalAmount = 0;
@@ -1221,6 +1227,10 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
 
             // Update overallValue with this transaction's discount amount
             discount.overallValue += discountAmount;
+            order.tax = newTax; // Update the order's tax to reflect the new tax after discount
+            order.discount = discountAmount ?? 0; // Store the discount amount in the order for reference
+
+            await order.save()
 
             await discount.save();
         }
