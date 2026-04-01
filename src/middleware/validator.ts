@@ -1124,8 +1124,8 @@ const validatePaymentAndDeliveryUpdate = (
         const inputDate = new Date(value);
 
         if (isNaN(inputDate.getTime())) {
-          return helpers.error("any.invalid", {
-            message: "Delivery date is not a valid date",
+          return helpers.message({
+            custom: "Delivery date is not a valid date",
           });
         }
 
@@ -1133,8 +1133,8 @@ const validatePaymentAndDeliveryUpdate = (
         today.setHours(0, 0, 0, 0);
 
         if (inputDate < today) {
-          return helpers.error("any.invalid", {
-            message: "Delivery date cannot be in the past",
+          return helpers.message({
+            custom: "Delivery date cannot be in the past",
           });
         }
 

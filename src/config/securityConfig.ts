@@ -22,6 +22,7 @@ export const initRateLimiter = () => {
     storeClient: mongoClient,
     dbName,
     tableName: 'rateLimits',
+    disableIndexesCreation: true,
     points: 30,
     duration: 60,
     blockDuration: 60,

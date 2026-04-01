@@ -277,6 +277,7 @@ if ((eventDetails.isPickUp || eventDetails.isPlatformDelivery)) {
 }
 
       const paymentDateTime = parseDateTime(paymentBody.paymentDate, paymentBody.paymentTime);
+      console.log('here')
       const deliveryDateTime = parseDateTime(paymentBody.deliveryDate, paymentBody.deliveryTime);
       const eventDateTime = parseDateTime(eventDetails.date, eventDetails.time);
 
@@ -790,6 +791,7 @@ static async updateById(req: AuthenticatedRequest, res: Response) {
 
     // Parse datetime fields
     const paymentDateTime = parseDateTime(paymentDate || existingRecord?.paymentDate, paymentTime || existingRecord?.paymentTime);
+    console.log("here")
     const deliveryDateTime = parseDateTime(deliveryDate || existingRecord?.deliveryDate, deliveryTime || existingRecord?.deliveryTime);
     const eventDateTime = parseDateTime(event?.date, event?.time);
 
