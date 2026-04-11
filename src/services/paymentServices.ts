@@ -117,7 +117,7 @@ class PaymentService {
 
       const response = await paystack.post(`/transaction/initialize`, {
         email,
-        amount: amount * 100, // Convert to kobo (smallest currency unit)
+        amount: Math.round(amount * 100), // Convert to kobo (smallest currency unit, must be integer)
         reference: payment.paymentReference, // Use payment record ID as reference
         callback_url: `${process.env.CLIENT_URL}/orderSuccessful?orderId=${orderId}`,
         // bearer: "account", // "customer" or "account"

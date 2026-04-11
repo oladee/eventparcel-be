@@ -44,8 +44,8 @@ export const validateBankAccount = async (req: Request, res: Response): Promise<
         summaryByCurrency[currency] = { overallSales: 0, netSales: 0 };
       }
   
-      // Add overall sales (total guest payment)
-      summaryByCurrency[currency].overallSales += order?.totalAmount || 0;
+      // Add overall sales (itemTotal minus discount, excluding delivery fee)
+      summaryByCurrency[currency].overallSales += (order?.itemTotal || 0) - (order?.discount || 0);
   
       // Add net sales (amount received)
       summaryByCurrency[amountCurrency].netSales += payment?.amount || 0;
@@ -141,7 +141,7 @@ const [payments, totalPayments, summaryByCurrency] = await Promise.all([
           orderNumber: order?.orderId,
           guestPayment: order?.totalAmount,
           guestPaymentCurrency: order?.totalAmountCurrency,
-          amountReceived: Math.max(0, (order?.totalAmount) - ((order.tax || 0) + (order.homeDeliveryFee || 0))),
+          amountReceived: Math.max(0, (order?.itemTotal || 0) - (order?.discount || 0) - (order?.tax || 0) ),
           amountReceivedCurrency: payment?.currency,
           items: order.items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0),
           homeDeliveryFee: order?.homeDeliveryFee,

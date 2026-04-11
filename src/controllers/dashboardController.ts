@@ -338,24 +338,25 @@ export const calculateOverallSales = (
   for (const order of filteredOrders) {
     const orderDate = new Date(order?.createdAt ?? Date.now());
 
-    // Total sales
-    totalSales += order.totalAmount;
+    // Total sales (itemTotal minus discount, excluding delivery fee)
+    const saleAmount = (order.itemTotal || 0) - (order.discount || 0);
+    totalSales += saleAmount;
 
     // Monthly sales
     const month = orderDate.toLocaleString("en-US", { month: "short" }) as keyof typeof monthlySales;
     if (monthlySales[month] !== undefined) {
-      monthlySales[month] += order.totalAmount;
+      monthlySales[month] += saleAmount;
     }
 
     // Daily sales (weekday)
     const weekday = orderDate.toLocaleString("en-US", { weekday: "long" }) as keyof typeof dailySalesByWeekday;
     if (dailySalesByWeekday[weekday] !== undefined) {
-      dailySalesByWeekday[weekday] += order.totalAmount;
+      dailySalesByWeekday[weekday] += saleAmount;
     }
 
     // Daily sales by exact date
     const dateKey = orderDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    dailySalesByDate.set(dateKey, (dailySalesByDate.get(dateKey) || 0) + order.totalAmount);
+    dailySalesByDate.set(dateKey, (dailySalesByDate.get(dateKey) || 0) + saleAmount);
   }
 
   // Convert to arrays
