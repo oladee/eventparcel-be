@@ -978,10 +978,10 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             if (!pickupDetail)
                 return ErrorHandler.badUserInput(res, "Pickup details not found for this event.");
 
-            const pickupState = pickupDetail.state?.trim();
-            const pickupCity = pickupDetail.city?.trim();
-            const guestState = state.trim();
-            const guestCity = city.trim();
+            const pickupStateId = pickupDetail.state?.toString();
+            const pickupCityId = pickupDetail.city?.toString();
+            const guestStateId = state.trim();
+            const guestCityId = city.trim();
 
             const totalPackages = items.reduce(
                 (sum: number, pkg: any) => sum + pkg.quantity,
@@ -990,10 +990,10 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
 
             // Compute delivery fee
             const computedDeliveryFee = await computeDeliveryFee(
-                pickupState as string,
-                pickupCity as string,
-                guestState,
-                guestCity,
+                pickupStateId as string,
+                pickupCityId as string,
+                guestStateId,
+                guestCityId,
                 totalPackages
             );
 
@@ -1002,7 +1002,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             if (computedDeliveryFee === 0) {
                 dispatchType = "selfManaged";
                 console.log(
-                    `⚠️ No delivery fee mapping found for ${pickupState} → ${guestState}`
+                    `⚠️ No delivery fee mapping found for stateId:${pickupStateId} → stateId:${guestStateId}`
                 );
             }
 

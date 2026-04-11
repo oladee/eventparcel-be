@@ -1,21 +1,29 @@
 import { Router } from "express";
 import {
-    importCSV,
     getAllDeliveryFees,
+    downloadTemplate,
+    importDeliveryFeePreview,
+    confirmDeliveryFeeImport,
     createDeliveryFee,
     updateDeliveryFee,
     deleteDeliveryFee,
 } from "../controllers/deliveryFeeController";
-import { authenticate } from "../middleware/authentication";
-import { upload } from '../middleware/newMulter';
-
+import { authenticate, authorizeRole } from "../middleware/authentication";
+import { upload } from "../middleware/newMulter";
 
 const router = Router();
 
-router.post("/import-delivery-fee", authenticate, upload.single("file"), importCSV);
-router.get("/delivery-fee", authenticate, getAllDeliveryFees);
-router.post("/add-delivery-fee", authenticate, createDeliveryFee);
-router.patch("/update-delivery-fee/:id", authenticate, updateDeliveryFee);
-router.delete("/delete-delivery-fee/:id", authenticate, deleteDeliveryFee);
+// Template download
+router.get("/admin/delivery-fees/template", authenticate, authorizeRole("admin"), downloadTemplate);
+
+// Import flow
+router.post("/admin/delivery-fees/import", authenticate, authorizeRole("admin"), upload.single("file"), importDeliveryFeePreview);
+router.post("/admin/delivery-fees/import/:importId/confirm", authenticate, authorizeRole("admin"), confirmDeliveryFeeImport);
+
+// CRUD
+router.get("/admin/delivery-fees", authenticate, authorizeRole("admin"), getAllDeliveryFees);
+router.post("/admin/delivery-fees", authenticate, authorizeRole("admin"), createDeliveryFee);
+router.patch("/admin/delivery-fees/:id", authenticate, authorizeRole("admin"), updateDeliveryFee);
+router.delete("/admin/delivery-fees/:id", authenticate, authorizeRole("admin"), deleteDeliveryFee);
 
 export default router;

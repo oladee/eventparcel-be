@@ -257,144 +257,138 @@ const hasPlatformDelivery = packages.some(pkg => {
 });
 
 
-// Pickup details validation
-if ((eventDetails.isPickUp || eventDetails.isPlatformDelivery)) {
-  if (!paymentBody.state || !paymentBody.city) {
-    return ErrorHandler.badUserInput(res, "State and City are required for pickup details.");
-  }
-
-  // // Info modal logic
-  // if (hasPlatformDelivery) {
-  //   if (restrictedStatesForPlatformDelivery.includes(paymentBody.state)) {
-  //     // Show info modal: remote areas in this state may not be covered
-  //     // Frontend can handle this via response metadata
-  //     return sendResponse(res, 200, "Some of your guest addresses may fall outside our delivery partner’s coverage.", { showInfoModal: true });
-  //   } else {
-  //     // State outside covered states
-  //     return ErrorHandler.badUserInput(res, `We are currently unable to cover ${paymentBody.state}`);
-  //   }
-  // }
-}
-
-      const paymentDateTime = parseDateTime(paymentBody.paymentDate, paymentBody.paymentTime);
-      console.log('here')
-      const deliveryDateTime = parseDateTime(paymentBody.deliveryDate, paymentBody.deliveryTime);
-      const eventDateTime = parseDateTime(eventDetails.date, eventDetails.time);
-
-      console.log("Event Date: ", eventDateTime)
-      console.log("Payment Date: ", paymentDateTime)
-      console.log("Delivery Date: ", deliveryDateTime)
-
-      if (req.body.paymentDate && req.body.paymentTime && paymentDateTime && eventDateTime && paymentDateTime.getTime() > eventDateTime.getTime()) {
-          return ErrorHandler.validationError(res, "Payment Date Deadline must be before Event Date!");
-      }
-
-      if (paymentDateTime && paymentDateTime.getTime() < new Date().getTime()) {
-        return ErrorHandler.validationError(res, "Payment Date Deadline cannot be in the past!");
-      }
-
-      if (req.body.deliveryDate && req.body.deliveryTime && deliveryDateTime && eventDateTime && deliveryDateTime.getTime() > eventDateTime.getTime()) {
-          return ErrorHandler.validationError(res, "Delivery Date must be before Event Date!");
-        }
-
-      if (deliveryDateTime && deliveryDateTime.getTime() < new Date().getTime()) {
-        return ErrorHandler.validationError(res, "Delivery Date cannot be in the past!");
-      }
-
-  
-      // Include nairaAccount and dollarAccount only if eventDetails requires them and they have valid data
-      if (eventDetails.isNairaAccount && nairaAccount) {
-        paymentBody.nairaAccount = nairaAccount;
-      }
-  
-      if (eventDetails.isDollarAccount && dollarAccount) {
-        paymentBody.dollarAccount = dollarAccount;
-      }
-  
-      let phoneNumber = paymentBody.contactPhoneNumber;
-
-      if (eventDetails.isSelfManaged && !eventDetails.isPickUp && !eventDetails.isPlatformDelivery) {
-        phoneNumber = normalizePhoneNumber(paymentBody.contactPhoneNumber);
-  
-        // Validate phone number
-       // if (!phoneNumber) {
-         // return ErrorHandler.badUserInput(res, "Contact phone number is required");
-      //  }
-  
-        const phoneValidationResult = validatePhoneNumber(phoneNumber);
-        if (!phoneValidationResult.success) {
-          return ErrorHandler.badUserInput(res, phoneValidationResult.message, { phoneNumber });
-        }
-      }
-  
-      // Validate required payout details based on currency
-      if (eventDetails?.isNairaAccount && !nairaAccount) {
-        return ErrorHandler.badUserInput(res, "Naira Payout Details are required!");
-      }
-  
-      if (eventDetails?.isDollarAccount && !dollarAccount) {
-        return ErrorHandler.badUserInput(res, "Dollar Payout Details are required!");
-      }
-  
-      if (eventDetails?.isNairaAccount && eventDetails?.isDollarAccount) {
-        if (!nairaAccount && !dollarAccount) {
-          return ErrorHandler.badUserInput(res, "Naira and Dollar Payout Details are required!");
-        }
-      }
-
-      // Validate bank account details and create recipient code if nairaAccount is provided
-      if (eventDetails?.isNairaAccount && nairaAccount) {
-        // Validate account number only if nairaAccount is provided
-        const result = await PaymentService.validateBankAccount(
-            nairaAccount.accountNumber,
-            nairaAccount.bankCode
-        );
-    
-        if (!result?.data || !result.data.account_name || !result.data.account_number) {
-            return ErrorHandler.badUserInput(res, "Invalid bank account details provided.");
-        }
-    
-        // Generate recipient code
-        const recipientCode = await WithdrawalService.createRecipient(
-            result.data.account_name,
-            result.data.account_number,
-            nairaAccount.bankCode,
-            eventDetails.hostEmail
-        );
-    
-        // Assign recipientCode to nairaAccount
-        nairaAccount.recipientCode = recipientCode;
-    }    
-  
-      // Create Payment & Delivery record
-      const paymentAndDelivery = await PaymentAndDeliveryService.createPaymentAndDelivery({
-        user: userId,
-        event: new mongoose.Types.ObjectId(req.body.event.trim()),
-        ...(paymentBody.nairaAccount && { nairaAccount: paymentBody.nairaAccount }),
-        ...(paymentBody.dollarAccount && { dollarAccount: paymentBody.dollarAccount }),
-        paymentDate: paymentBody.paymentDate,
-        paymentTime: paymentBody.paymentTime,
-        paymentTimeZone: paymentBody.paymentTimeZone,
-        contactName: paymentBody.contactName,
-        contactPhoneNumber: phoneNumber ?? paymentBody.contactPhoneNumber,
-        pickupLocation: paymentBody.pickupLocation,
-        pickupLatitude: paymentBody.pickupLatitude,
-        pickupLongitude: paymentBody.pickupLongitude,
-        state: paymentBody.state,
-        city: paymentBody.city,
-        deliveryDate: paymentBody.deliveryDate,
-        deliveryTime: paymentBody.deliveryTime,
-        deliveryTimeZone: paymentBody.deliveryTimeZone,
-        isDraft: paymentBody.isDraft,
-      });
-  
-      return sendResponse(res, 201, "Payment and Delivery record created successfully!", paymentAndDelivery);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        return ErrorHandler.internalServerError(res, error.message);
-      }
+  // Pickup details validation
+  if ((eventDetails.isPickUp || eventDetails.isPlatformDelivery)) {
+    if (!paymentBody.state || !paymentBody.city) {
+      return ErrorHandler.badUserInput(res, "State and City are required for pickup details.");
+    }
+    if (!mongoose.isValidObjectId(paymentBody.state)) {
+      return ErrorHandler.badUserInput(res, "Invalid State ID provided.");
+    }
+    if (!mongoose.isValidObjectId(paymentBody.city)) {
+      return ErrorHandler.badUserInput(res, "Invalid City ID provided.");
     }
   }
+
+    const paymentDateTime = parseDateTime(paymentBody.paymentDate, paymentBody.paymentTime);
+    console.log('here')
+    const deliveryDateTime = parseDateTime(paymentBody.deliveryDate, paymentBody.deliveryTime);
+    const eventDateTime = parseDateTime(eventDetails.date, eventDetails.time);
+
+    console.log("Event Date: ", eventDateTime)
+    console.log("Payment Date: ", paymentDateTime)
+    console.log("Delivery Date: ", deliveryDateTime)
+
+    if (req.body.paymentDate && req.body.paymentTime && paymentDateTime && eventDateTime && paymentDateTime.getTime() > eventDateTime.getTime()) {
+        return ErrorHandler.validationError(res, "Payment Date Deadline must be before Event Date!");
+    }
+
+    if (paymentDateTime && paymentDateTime.getTime() < new Date().getTime()) {
+      return ErrorHandler.validationError(res, "Payment Date Deadline cannot be in the past!");
+    }
+
+    if (req.body.deliveryDate && req.body.deliveryTime && deliveryDateTime && eventDateTime && deliveryDateTime.getTime() > eventDateTime.getTime()) {
+        return ErrorHandler.validationError(res, "Delivery Date must be before Event Date!");
+      }
+
+    if (deliveryDateTime && deliveryDateTime.getTime() < new Date().getTime()) {
+      return ErrorHandler.validationError(res, "Delivery Date cannot be in the past!");
+    }
+
+
+    // Include nairaAccount and dollarAccount only if eventDetails requires them and they have valid data
+    if (eventDetails.isNairaAccount && nairaAccount) {
+      paymentBody.nairaAccount = nairaAccount;
+    }
+
+    if (eventDetails.isDollarAccount && dollarAccount) {
+      paymentBody.dollarAccount = dollarAccount;
+    }
+
+    let phoneNumber = paymentBody.contactPhoneNumber;
+
+    if (eventDetails.isSelfManaged && !eventDetails.isPickUp && !eventDetails.isPlatformDelivery) {
+      phoneNumber = normalizePhoneNumber(paymentBody.contactPhoneNumber);
+
+      // Validate phone number
+      // if (!phoneNumber) {
+        // return ErrorHandler.badUserInput(res, "Contact phone number is required");
+    //  }
+
+      const phoneValidationResult = validatePhoneNumber(phoneNumber);
+      if (!phoneValidationResult.success) {
+        return ErrorHandler.badUserInput(res, phoneValidationResult.message, { phoneNumber });
+      }
+    }
+
+    // Validate required payout details based on currency
+    if (eventDetails?.isNairaAccount && !nairaAccount) {
+      return ErrorHandler.badUserInput(res, "Naira Payout Details are required!");
+    }
+
+    if (eventDetails?.isDollarAccount && !dollarAccount) {
+      return ErrorHandler.badUserInput(res, "Dollar Payout Details are required!");
+    }
+
+    if (eventDetails?.isNairaAccount && eventDetails?.isDollarAccount) {
+      if (!nairaAccount && !dollarAccount) {
+        return ErrorHandler.badUserInput(res, "Naira and Dollar Payout Details are required!");
+      }
+    }
+
+    // Validate bank account details and create recipient code if nairaAccount is provided
+    if (eventDetails?.isNairaAccount && nairaAccount) {
+      // Validate account number only if nairaAccount is provided
+      const result = await PaymentService.validateBankAccount(
+          nairaAccount.accountNumber,
+          nairaAccount.bankCode
+      );
+  
+      if (!result?.data || !result.data.account_name || !result.data.account_number) {
+          return ErrorHandler.badUserInput(res, "Invalid bank account details provided.");
+      }
+  
+      // Generate recipient code
+      const recipientCode = await WithdrawalService.createRecipient(
+          result.data.account_name,
+          result.data.account_number,
+          nairaAccount.bankCode,
+          eventDetails.hostEmail
+      );
+  
+      // Assign recipientCode to nairaAccount
+      nairaAccount.recipientCode = recipientCode;
+  }    
+  
+    // Create Payment & Delivery record
+    const paymentAndDelivery = await PaymentAndDeliveryService.createPaymentAndDelivery({
+      user: userId,
+      event: new mongoose.Types.ObjectId(req.body.event.trim()),
+      ...(paymentBody.nairaAccount && { nairaAccount: paymentBody.nairaAccount }),
+      ...(paymentBody.dollarAccount && { dollarAccount: paymentBody.dollarAccount }),
+      paymentDate: paymentBody.paymentDate,
+      paymentTime: paymentBody.paymentTime,
+      paymentTimeZone: paymentBody.paymentTimeZone,
+      contactName: paymentBody.contactName,
+      contactPhoneNumber: phoneNumber ?? paymentBody.contactPhoneNumber,
+      pickupLocation: paymentBody.pickupLocation,
+      pickupLatitude: paymentBody.pickupLatitude,
+      pickupLongitude: paymentBody.pickupLongitude,
+      ...(paymentBody.state && { state: new mongoose.Types.ObjectId(paymentBody.state) }),
+      ...(paymentBody.city && { city: new mongoose.Types.ObjectId(paymentBody.city) }),
+      deliveryDate: paymentBody.deliveryDate,
+      deliveryTime: paymentBody.deliveryTime,
+      deliveryTimeZone: paymentBody.deliveryTimeZone,
+      isDraft: paymentBody.isDraft,
+    });
+
+    return sendResponse(res, 201, "Payment and Delivery record created successfully!", paymentAndDelivery);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return ErrorHandler.internalServerError(res, error.message);
+    }
+  }
+}
 
 
 
@@ -829,8 +823,8 @@ static async updateById(req: AuthenticatedRequest, res: Response) {
         pickupLocation,
         pickupLatitude,
         pickupLongitude,
-        state, 
-        city,
+        ...(state && mongoose.isValidObjectId(state) && { state: new mongoose.Types.ObjectId(state) }),
+        ...(city && mongoose.isValidObjectId(city) && { city: new mongoose.Types.ObjectId(city) }),
         deliveryDate,
         deliveryTime,
         deliveryTimeZone,
@@ -861,8 +855,8 @@ static async updateById(req: AuthenticatedRequest, res: Response) {
       ...(pickupLocation && { pickupLocation }),
       ...(pickupLatitude && { pickupLatitude }),
       ...(pickupLongitude && { pickupLongitude }),
-      ...(state && { state }), 
-      ...(city && { city }), 
+      ...(state && mongoose.isValidObjectId(state) && { state: new mongoose.Types.ObjectId(state) }),
+      ...(city && mongoose.isValidObjectId(city) && { city: new mongoose.Types.ObjectId(city) }),
       ...(deliveryDate && { deliveryDate }),
       ...(deliveryTime && { deliveryTime }),
       ...(deliveryTimeZone && { deliveryTimeZone }),

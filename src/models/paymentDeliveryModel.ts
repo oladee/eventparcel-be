@@ -101,10 +101,12 @@ const PaymentAndDeliverySchema = new Schema<IPaymentAndDelivery>(
       type: String,
     },
     state: {
-      type: String
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "State",
     },
     city: {
-      type: String
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "City",
     },
     deliveryDate: {
       type: String,

@@ -31,6 +31,7 @@ import adminDeliveryRoute from './routes/adminDeliveryRoute';
 import adminTransactionRoute from './routes/adminTransactionRoute';
 import adminFeeSummaryRoute from './routes/feeSummaryRoutes';
 import adminHostRoute from './routes/adminHostRoute';
+import adminStateRoute from './routes/adminStateRoute';
 import deletionRoute from './routes/deletionRoute';
 import monitorRoutes from "./routes/monitor";
 import deliveryFee from "./routes/deliveryFeeRoute";
@@ -50,18 +51,18 @@ dotenv.config();
 
 // Normalize origins to avoid mismatches due to trailing slashes or casing
 const normalizeOrigin = (o?: string) =>
-    o ? o.replace(/\/$/, "").toLowerCase() : o;
+  o ? o.replace(/\/$/, "").toLowerCase() : o;
 
 // Read CORS whitelist from env; support comma/semicolon/whitespace/newlines
 const parseCorsWhitelist = (raw?: string): (string | undefined)[] => {
-    if (!raw) return [];
-    const parts = raw
-        .split(/[\s,;]+/) // split by comma, semicolon, or any whitespace
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(normalizeOrigin);
-    // Deduplicate while preserving order
-    return Array.from(new Set(parts));
+  if (!raw) return [];
+  const parts = raw
+    .split(/[\s,;]+/) // split by comma, semicolon, or any whitespace
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(normalizeOrigin);
+  // Deduplicate while preserving order
+  return Array.from(new Set(parts));
 };
 
 const app: Application = express();
@@ -82,7 +83,7 @@ const defaultDevWhitelist: string[] = [
 ];
 
 const normalizedWhitelist =
-    envWhitelist.length > 0 ? envWhitelist : defaultDevWhitelist;
+  envWhitelist.length > 0 ? envWhitelist : defaultDevWhitelist;
 
 const corsOptions: CorsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: string | boolean) => void) => {
@@ -105,10 +106,10 @@ app.use('/api/v1/paystack-webhook', express.raw({ type: 'application/json' }));
 
 // Middleware to add raw body to req object
 app.use('/api/v1/paystack-webhook', (req, res, next) => {
-    if (req.headers['x-paystack-signature']) {
-      (req as Express.Request).rawBody = req.body; // Use raw body for signature verification
-    }
-    next();
+  if (req.headers['x-paystack-signature']) {
+    (req as Express.Request).rawBody = req.body; // Use raw body for signature verification
+  }
+  next();
 });
 
 
@@ -157,12 +158,12 @@ const whatsappWebhook = new WhatsAppWebhook({
     console.log('Processing message:', message);
     // Add your message handling logic here
   },
-onStatusUpdate: (statuses) => {
+  onStatusUpdate: (statuses) => {
     statuses.forEach((status: any) => {
       tracker.updateStatus(status.id, status.status);
 
-    // ✅ Log it to Render logs
-    console.log(`🔄 Status Update:
+      // ✅ Log it to Render logs
+      console.log(`🔄 Status Update:
       Message ID: ${status.id}
       Status: ${status.status}
       Timestamp: ${new Date().toISOString()}
@@ -178,7 +179,7 @@ securityConfig(app);
 app.use(monitorRoutes);
 
 app.get('/', async (req: Request, res: Response): Promise<Response> => {
-    return res.send("Welcome to Event Parcel API");
+  return res.send("Welcome to Event Parcel API");
 });
 
 // WhatsApp Webhook Verification Route
@@ -208,11 +209,12 @@ app.use("/api/v1", notificationRoute);
 app.use("/api/v1", webhookRoute);
 app.use('/api/v1', adminRoute);
 app.use('/api/v1', adminEventRoute);
-app.use('/api/v1', adminOrderRoute); 
+app.use('/api/v1', adminOrderRoute);
 app.use('/api/v1', adminDeliveryRoute);
 app.use('/api/v1', adminTransactionRoute);
 app.use('/api/v1', adminFeeSummaryRoute);
 app.use('/api/v1', adminHostRoute);
+app.use('/api/v1', adminStateRoute);
 app.use('/api/v1', deletionRoute);
 app.use('/api/v1', deliveryFee);
 

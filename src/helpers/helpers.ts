@@ -733,78 +733,92 @@ export const formatEventDate = (
 
 
 import DeliveryFee from "../models/deliveryFeeModel";
+import { StateModel } from "../models/stateModel";
+import { CityModel } from "../models/cityModel";
 
-const ALLOWED_STATES = ["Lagos", "Oyo", "Abuja", "Osun", "Ogun"];
-
+/**
+ * Compute delivery fee using State and City ObjectIds.
+ * Falls back using an "others" city in the same state if exact city not found.
+ */
 export const computeDeliveryFee = async (
-  pickupState: string,
-  pickupCity: string,
-  destinationState: string,
-  destinationCity: string,
+  pickupStateId: string,
+  pickupCityId: string,
+  destinationStateId: string,
+  destinationCityId: string,
   totalQuantity: number
 ): Promise<number> => {
-  console.log("computeDeliveryFee", pickupState, pickupCity, destinationState, destinationCity, totalQuantity);
-  // ✅ 1. Restrict delivery to allowed states
-  if (!ALLOWED_STATES.includes(destinationState)) {
+  console.log("computeDeliveryFee IDs", pickupStateId, pickupCityId, destinationStateId, destinationCityId, totalQuantity);
+
+  // 1. Check destinationState is delivery-covered
+  const destinationState = await StateModel.findOne({ _id: destinationStateId, status: "active", deliveryCovered: true });
+  if (!destinationState) {
     throw new Error(
-      `We currently only deliver to the following states: ${ALLOWED_STATES.join(
-        ", "
-      )}. Deliveries to ${destinationState} are not supported.`
+      `We currently do not deliver to the selected destination state. Please check available delivery locations.`
     );
   }
 
-  // ✅ 2. Try to find an exact match first
+  // Helper: find "others" city ObjectId within a given state
+  const getOthersCityId = async (stateId: string) => {
+    const othersCity = await CityModel.findOne({ normalizedName: "others", stateId, status: "active" });
+    return othersCity ? othersCity._id : null;
+  };
+
+  const pickupOthersId = await getOthersCityId(pickupStateId);
+  const destOthersId = await getOthersCityId(destinationStateId);
+
+  // 2. Exact match
   let feeRecord = await DeliveryFee.findOne({
-    pickupState: { $regex: new RegExp(`^${pickupState}$`, "i") },
-    pickupCity: { $regex: new RegExp(`^${pickupCity}$`, "i") },
-    destinationState: { $regex: new RegExp(`^${destinationState}$`, "i") },
-    destinationCity: { $regex: new RegExp(`^${destinationCity}$`, "i") },
+    pickupState: pickupStateId,
+    pickupCity: pickupCityId,
+    destinationState: destinationStateId,
+    destinationCity: destinationCityId,
+    status: "active",
   });
 
-  // ✅ 3. If no match, try replacing destination city with "Others"
-  if (!feeRecord) {
+  // 3. Fallback: destination city → "others"
+  if (!feeRecord && destOthersId) {
     feeRecord = await DeliveryFee.findOne({
-      pickupState: { $regex: new RegExp(`^${pickupState}$`, "i") },
-      pickupCity: { $regex: new RegExp(`^${pickupCity}$`, "i") },
-      destinationState: { $regex: new RegExp(`^${destinationState}$`, "i") },
-      destinationCity: { $regex: /^Others$/i },
+      pickupState: pickupStateId,
+      pickupCity: pickupCityId,
+      destinationState: destinationStateId,
+      destinationCity: destOthersId,
+      status: "active",
     });
   }
 
-  // ✅ 4. If still no match, try replacing pickup city with "Others"
-  if (!feeRecord) {
+  // 4. Fallback: pickup city → "others"
+  if (!feeRecord && pickupOthersId) {
     feeRecord = await DeliveryFee.findOne({
-      pickupState: { $regex: new RegExp(`^${pickupState}$`, "i") },
-      pickupCity: { $regex: /^Others$/i },
-      destinationState: { $regex: new RegExp(`^${destinationState}$`, "i") },
-      destinationCity: { $regex: new RegExp(`^${destinationCity}$`, "i") },
+      pickupState: pickupStateId,
+      pickupCity: pickupOthersId,
+      destinationState: destinationStateId,
+      destinationCity: destinationCityId,
+      status: "active",
     });
   }
 
-  // ✅ 5. If neither found, try both pickup and destination as "Others"
-  if (!feeRecord) {
+  // 5. Fallback: both cities → "others"
+  if (!feeRecord && pickupOthersId && destOthersId) {
     feeRecord = await DeliveryFee.findOne({
-      pickupState: { $regex: new RegExp(`^${pickupState}$`, "i") },
-      pickupCity: { $regex: /^Others$/i },
-      destinationState: { $regex: new RegExp(`^${destinationState}$`, "i") },
-      destinationCity: { $regex: /^Others$/i },
+      pickupState: pickupStateId,
+      pickupCity: pickupOthersId,
+      destinationState: destinationStateId,
+      destinationCity: destOthersId,
+      status: "active",
     });
   }
 
   console.log("feeRecord", feeRecord);
 
-  // ✅ 6. If still not found, return 0 (self-managed delivery)
+  // 6. No mapping found — treat as self-managed (return 0)
   if (!feeRecord) return 0;
 
-  // ✅ 7. Compute total delivery fee
+  // 7. Compute total delivery fee
   const { baseFee, multiplier } = feeRecord;
-
   if (totalQuantity <= 4) {
     return baseFee;
-  } else {
-    const normal = baseFee;
-    const extraItems = totalQuantity - 4;
-    const extra = extraItems * (baseFee * (multiplier / 100)); // Only the multiplier amount
-    return normal + extra;
   }
+  const extraItems = totalQuantity - 4;
+  const extra = extraItems * (baseFee * (multiplier / 100));
+  return baseFee + extra;
 };

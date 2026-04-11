@@ -49,7 +49,7 @@ export interface IBaseUser extends Document {
 
 // Host-specific fields
 export interface IHost extends IBaseUser {
-  role: "host"; 
+  role: "host";
   balance: number;
   usdBalance: number;
   isDisabled: boolean;
@@ -59,7 +59,7 @@ export interface IHost extends IBaseUser {
 
 // CoHost-specific fields
 export interface ICoHost extends IBaseUser {
-  role: "cohost"; 
+  role: "cohost";
   host: Types.ObjectId;
   hostEmail: string;
   coHostInviteStatus: "pending" | "accepted" | "declined" | "canceled";
@@ -67,49 +67,49 @@ export interface ICoHost extends IBaseUser {
 
 // Admin-specific fields
 export interface IAdmin extends IBaseUser {
-  isAdmin: boolean; 
+  isAdmin: boolean;
 }
 
 // SuperAdmin-specific fields
 export interface ISuperAdmin extends IBaseUser {
   isSuperAdmin: boolean;
 }
-  
+
 export interface IUser extends Document {
-    _id: Types.ObjectId;
-    firstName: string;
-    lastName: string;
-    email: string;
-    maskedEmail: string;
-    phoneNumber: string;
-    password: string;
-    role: string;
-    isVerified: boolean;
-    accessToken: string | null;
-    refreshToken: string[];
-    imageUrl: string | null;
-    imagePublicId: string | null;
-    lastLogin: Date[];
-    otp: string | undefined;
-    otpExpiry: any;
-    otpAttempts: number;
-    isOtpVerified: boolean;
-    lastActive: string;
-    facebookId: string;
-    googleId: string;
-    appleId: string;
-    microsoftId: string;
-    hostEmail: string;
-    host: Types.ObjectId | undefined;
-    coHostInviteStatus: string;
-    balance: number | undefined;
-    usdBalance: number | undefined;
-    isDisabled: boolean;
-    hyperwalletToken?: string;
-    isHyperwalletVerified?: boolean;
-    createdAt?: Date;
-    updatedAt?: Date;
-  }
+  _id: Types.ObjectId;
+  firstName: string;
+  lastName: string;
+  email: string;
+  maskedEmail: string;
+  phoneNumber: string;
+  password: string;
+  role: string;
+  isVerified: boolean;
+  accessToken: string | null;
+  refreshToken: string[];
+  imageUrl: string | null;
+  imagePublicId: string | null;
+  lastLogin: Date[];
+  otp: string | undefined;
+  otpExpiry: any;
+  otpAttempts: number;
+  isOtpVerified: boolean;
+  lastActive: string;
+  facebookId: string;
+  googleId: string;
+  appleId: string;
+  microsoftId: string;
+  hostEmail: string;
+  host: Types.ObjectId | undefined;
+  coHostInviteStatus: string;
+  balance: number | undefined;
+  usdBalance: number | undefined;
+  isDisabled: boolean;
+  hyperwalletToken?: string;
+  isHyperwalletVerified?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 
 export interface IEvent extends Document {
@@ -138,7 +138,7 @@ export interface IEvent extends Document {
   isDraft?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
-} 
+}
 
 
 export interface IEventGroup extends Document {
@@ -218,8 +218,8 @@ export interface IPaymentAndDelivery extends Document {
   pickupLocation?: string;
   pickupLatitude?: string;
   pickupLongitude?: string;
-  state?: string;
-  city?: string;
+  state?: Types.ObjectId;
+  city?: Types.ObjectId;
   deliveryDate?: string;
   deliveryTime?: string;
   deliveryTimeZone?: string;
@@ -228,16 +228,16 @@ export interface IPaymentAndDelivery extends Document {
 
 
 export interface IGuestTracking extends Document {
-    guestName: string;
-    phoneNumber: string;
-    eventGroupId: Types.ObjectId;
-    eventId: Types.ObjectId;
-    hostId: Types.ObjectId;
-    inviteLink: string;
-    hasViewed: boolean;
-    status: "pending" | "viewed" | "ordered";
-    viewedAt?: Date;
-    createdAt?: Date;
+  guestName: string;
+  phoneNumber: string;
+  eventGroupId: Types.ObjectId;
+  eventId: Types.ObjectId;
+  hostId: Types.ObjectId;
+  inviteLink: string;
+  hasViewed: boolean;
+  status: "pending" | "viewed" | "ordered";
+  viewedAt?: Date;
+  createdAt?: Date;
 }
 
 
@@ -355,8 +355,8 @@ export interface IDiscount extends Document {
   _id: Types.ObjectId;
   event: Types.ObjectId;
   hostId: Types.ObjectId;
-  discountTitle: string;  
-  discountValue: number;  
+  discountTitle: string;
+  discountValue: number;
   discountValueType: "percentage" | "NGN" | "USD";
   discountCode: string;
   discountStatus: "active" | "inactive";
@@ -415,13 +415,39 @@ export interface IFeeRecord extends Document {
 };
 
 
-export interface IDeliveryFee {
-  pickupState: string;
-  pickupCity: string;
-  destinationState: string;
-  destinationCity: string;
+export interface IDeliveryFee extends Document {
+  pickupState: Types.ObjectId;
+  pickupCity: Types.ObjectId;
+  destinationState: Types.ObjectId;
+  destinationCity: Types.ObjectId;
   baseFee: number;
   multiplier: number;
+  status: "active" | "inactive";
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface IDeliveryFeeImportRow {
+  pickupState: Types.ObjectId;
+  pickupStateLabel: string;
+  pickupCity: Types.ObjectId;
+  pickupCityLabel: string;
+  destinationState: Types.ObjectId;
+  destinationStateLabel: string;
+  destinationCity: Types.ObjectId;
+  destinationCityLabel: string;
+  baseFee: number;
+  multiplier: number;
+  rowStatus: "new" | "duplicate" | "inactive_match";
+  existingDocId?: Types.ObjectId;
+}
+
+export interface IDeliveryFeeImport extends Document {
+  uploadedBy: Types.ObjectId;
+  rows: IDeliveryFeeImportRow[];
+  expiresAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 
@@ -431,6 +457,24 @@ export interface IExchangeRate extends Document {
   rate: number;
   source?: string;
   lastFetchedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface IState extends Document {
+  name: string;
+  normalizedName: string;
+  status: "active" | "inactive";
+  deliveryCovered: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface ICity extends Document {
+  name: string;
+  normalizedName: string;
+  stateId: Types.ObjectId;
+  status: "active" | "inactive";
   createdAt?: Date;
   updatedAt?: Date;
 }
