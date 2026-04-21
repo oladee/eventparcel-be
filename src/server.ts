@@ -3,8 +3,6 @@ import 'express-async-errors';
 import express, { Application, Request, Response, NextFunction } from "express";
 // import "./utils/express";
 import bodyParser from "body-parser";
-import swaggerJsdoc from "swagger-jsdoc"
-import swaggerUi from "swagger-ui-express"
 import cors, { CorsOptions } from "cors";
 import compression from "compression";
 import MongoStore from "connect-mongo";
@@ -32,6 +30,7 @@ import adminTransactionRoute from './routes/adminTransactionRoute';
 import adminFeeSummaryRoute from './routes/feeSummaryRoutes';
 import adminHostRoute from './routes/adminHostRoute';
 import adminStateRoute from './routes/adminStateRoute';
+import adminDeliveryFeeAuditLogRoute from './routes/adminDeliveryFeeAuditLogRoute';
 import deletionRoute from './routes/deletionRoute';
 import monitorRoutes from "./routes/monitor";
 import deliveryFee from "./routes/deliveryFeeRoute";
@@ -215,6 +214,7 @@ app.use('/api/v1', adminTransactionRoute);
 app.use('/api/v1', adminFeeSummaryRoute);
 app.use('/api/v1', adminHostRoute);
 app.use('/api/v1', adminStateRoute);
+app.use('/api/v1', adminDeliveryFeeAuditLogRoute);
 app.use('/api/v1', deletionRoute);
 app.use('/api/v1', deliveryFee);
 

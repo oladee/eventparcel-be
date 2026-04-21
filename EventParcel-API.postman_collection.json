@@ -481,6 +481,64 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Delivery Fee Audit Logs",
+      "description": "Admin endpoint for querying the `AdminDeliveryFeeAuditLog` collection.\n\n> **Requires admin authentication.**\n\n### What is logged?\nEvery create, update, and delete action performed through the following endpoints is automatically recorded:\n\n| Endpoint | Action | Resource |\n|----------|--------|----------|\n| Create State | `create` | `state` |\n| Delete State | `delete` | `state` |\n| Toggle Delivery Coverage | `update` | `state` |\n| Create City | `create` | `city` |\n| Delete City | `delete` | `city` |\n| Confirm Import | `create` | `delivery_fee_import` |\n| Create Delivery Fee | `create` | `delivery_fee` |\n| Update Delivery Fee | `update` | `delivery_fee` |\n| Delete Delivery Fee | `delete` | `delivery_fee` |\n\n### Log Entry Shape\n```json\n{\n  \"_id\": \"664f...\",\n  \"action\": \"create\",\n  \"performedBy\": {\n    \"_id\": \"664f...\",\n    \"firstName\": \"Super\",\n    \"lastName\": \"Admin\",\n    \"email\": \"admin@eventparcel.com\"\n  },\n  \"resource\": \"state\",\n  \"resourceId\": \"664f...\",\n  \"details\": { \"name\": \"Lagos\" },\n  \"createdAt\": \"2026-04-21T10:00:00.000Z\"\n}\n```",
+      "item": [
+        {
+          "name": "Get Delivery Fee Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT token required"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-fee-audit-logs?resource=&action=&from=&to=&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-fee-audit-logs"],
+              "query": [
+                {
+                  "key": "resource",
+                  "value": "",
+                  "description": "Filter by resource type: state | city | delivery_fee | delivery_fee_import"
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "description": "Filter by action: create | update | delete"
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "Start date filter (YYYY-MM-DD). Inclusive."
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "End date filter (YYYY-MM-DD). Inclusive (end of day)."
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Results per page (default: 20, max: 100)"
+                }
+              ]
+            },
+            "description": "Returns a paginated list of audit log entries for all delivery-fee-related admin actions.\n\n**Auth:** Admin Bearer token required.\n\n**Query Params (all optional):**\n| Param | Type | Description |\n|-------|------|-------------|\n| `resource` | string | Filter by resource: `state` \\| `city` \\| `delivery_fee` \\| `delivery_fee_import` |\n| `action` | string | Filter by action: `create` \\| `update` \\| `delete` |\n| `from` | string | Start date `YYYY-MM-DD` (inclusive) |\n| `to` | string | End date `YYYY-MM-DD` (inclusive, covers full day) |\n| `page` | number | Page number, default `1` |\n| `limit` | number | Items per page, default `20`, max `100` |\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Audit logs fetched successfully.\",\n  \"data\": {\n    \"logs\": [\n      {\n        \"_id\": \"664f...\",\n        \"action\": \"delete\",\n        \"performedBy\": {\n          \"_id\": \"664f...\",\n          \"firstName\": \"Super\",\n          \"lastName\": \"Admin\",\n          \"email\": \"admin@eventparcel.com\"\n        },\n        \"resource\": \"delivery_fee\",\n        \"resourceId\": \"664f...\",\n        \"details\": {\n          \"pickupState\": \"664f...0d\",\n          \"pickupCity\": \"664f...1a\",\n          \"destinationState\": \"664f...2b\",\n          \"destinationCity\": \"664f...3c\"\n        },\n        \"createdAt\": \"2026-04-21T10:00:00.000Z\"\n      }\n    ],\n    \"total\": 47,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 3\n  }\n}\n```"
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

@@ -461,6 +461,17 @@ export interface IExchangeRate extends Document {
   updatedAt?: Date;
 }
 
+export interface IAdminDeliveryFeeAuditLog extends Document {
+  _id: Types.ObjectId;
+  action: "create" | "update" | "delete";
+  performedBy: Types.ObjectId;
+  resource: "state" | "city" | "delivery_fee" | "delivery_fee_import";
+  resourceId: Types.ObjectId;
+  details?: Record<string, any>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface IState extends Document {
   name: string;
   normalizedName: string;

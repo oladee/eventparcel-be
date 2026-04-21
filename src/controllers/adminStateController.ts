@@ -3,6 +3,8 @@ import { StateModel } from "../models/stateModel";
 import { CityModel } from "../models/cityModel";
 import { sendResponse } from "../utils/ApiHandler/ApiResponse";
 import { ErrorHandler } from "../utils/errorHandler/errorHandler";
+import { AuthenticatedRequest } from "../middleware/authentication";
+import auditLog from "../services/adminDeliveryFeeAuditLogService";
 
 // ─────────────────────────────────────────────
 // STATE ENDPOINTS
@@ -12,7 +14,7 @@ import { ErrorHandler } from "../utils/errorHandler/errorHandler";
  * POST /api/v1/admin/states
  * Create a new state. If it already exists but is inactive, toggle it back to active.
  */
-export const createState = async (req: Request, res: Response): Promise<Response | undefined> => {
+export const createState = async (req: AuthenticatedRequest, res: Response): Promise<Response | undefined> => {
     try {
         const { name } = req.body;
         if (!name || !name.trim()) {
@@ -34,10 +36,12 @@ export const createState = async (req: Request, res: Response): Promise<Response
             existing.name = name.trim();
             existing.normalizedName = normalizedName;
             await existing.save();
+            auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "state", resourceId: existing._id, details: { name: existing.name, reactivated: true } });
             return sendResponse(res, 200, "State re-activated successfully.", existing);
         }
 
         const state = await StateModel.create({ name: name.trim(), normalizedName });
+        auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "state", resourceId: state._id, details: { name: state.name } });
         return sendResponse(res, 201, "State created successfully.", state);
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -99,7 +103,7 @@ export const getStates = async (req: Request, res: Response): Promise<Response |
  * DELETE /api/v1/admin/states/:stateId
  * Soft-delete a state and all its cities.
  */
-export const deleteState = async (req: Request, res: Response): Promise<Response | undefined> => {
+export const deleteState = async (req: AuthenticatedRequest, res: Response): Promise<Response | undefined> => {
     try {
         const { stateId } = req.params;
 
@@ -114,6 +118,7 @@ export const deleteState = async (req: Request, res: Response): Promise<Response
         // Soft-delete all cities belonging to this state
         await CityModel.updateMany({ stateId, status: "active" }, { status: "inactive" });
 
+        auditLog.log({ action: "delete", performedBy: req.user!.userId, resource: "state", resourceId: state._id, details: { name: state.name } });
         return sendResponse(res, 200, "State and its cities deleted successfully.");
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -128,7 +133,7 @@ export const deleteState = async (req: Request, res: Response): Promise<Response
  * POST /api/v1/admin/states/:stateId/cities
  * Add a city to a state. If it already exists but is inactive, toggle it back to active.
  */
-export const createCity = async (req: Request, res: Response): Promise<Response | undefined> => {
+export const createCity = async (req: AuthenticatedRequest, res: Response): Promise<Response | undefined> => {
     try {
         const { stateId } = req.params;
         const { name } = req.body;
@@ -157,10 +162,12 @@ export const createCity = async (req: Request, res: Response): Promise<Response 
             existing.name = name.trim();
             existing.normalizedName = normalizedName;
             await existing.save();
+            auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "city", resourceId: existing._id, details: { name: existing.name, stateId, stateName: state.name, reactivated: true } });
             return sendResponse(res, 200, "City re-activated successfully.", existing);
         }
 
         const city = await CityModel.create({ name: name.trim(), normalizedName, stateId });
+        auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "city", resourceId: city._id, details: { name: city.name, stateId, stateName: state.name } });
         return sendResponse(res, 201, "City created successfully.", city);
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -229,7 +236,7 @@ export const getCitiesByState = async (req: Request, res: Response): Promise<Res
  * DELETE /api/v1/admin/states/:stateId/cities/:cityId
  * Soft-delete a city.
  */
-export const deleteCity = async (req: Request, res: Response): Promise<Response | undefined> => {
+export const deleteCity = async (req: AuthenticatedRequest, res: Response): Promise<Response | undefined> => {
     try {
         const { stateId, cityId } = req.params;
 
@@ -241,6 +248,7 @@ export const deleteCity = async (req: Request, res: Response): Promise<Response 
         city.status = "inactive";
         await city.save();
 
+        auditLog.log({ action: "delete", performedBy: req.user!.userId, resource: "city", resourceId: city._id, details: { name: city.name, stateId } });
         return sendResponse(res, 200, "City deleted successfully.");
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -253,7 +261,7 @@ export const deleteCity = async (req: Request, res: Response): Promise<Response 
  * PATCH /api/v1/admin/states/:stateId/delivery-covered
  * Toggle deliveryCovered on a state (admin only).
  */
-export const toggleDeliveryCovered = async (req: Request, res: Response): Promise<Response | undefined> => {
+export const toggleDeliveryCovered = async (req: AuthenticatedRequest, res: Response): Promise<Response | undefined> => {
     try {
         const { stateId } = req.params;
 
@@ -265,6 +273,7 @@ export const toggleDeliveryCovered = async (req: Request, res: Response): Promis
         state.deliveryCovered = !state.deliveryCovered;
         await state.save();
 
+        auditLog.log({ action: "update", performedBy: req.user!.userId, resource: "state", resourceId: state._id, details: { stateName: state.name, deliveryCovered: state.deliveryCovered } });
         return sendResponse(res, 200, `Delivery coverage ${state.deliveryCovered ? "enabled" : "disabled"} for ${state.name}.`, { deliveryCovered: state.deliveryCovered });
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);

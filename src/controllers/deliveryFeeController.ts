@@ -9,6 +9,7 @@ import { sendResponse } from "../utils/ApiHandler/ApiResponse";
 import { ErrorHandler } from "../utils/errorHandler/errorHandler";
 import { Types } from "mongoose";
 import { AuthenticatedRequest } from "../middleware/authentication";
+import auditLog from "../services/adminDeliveryFeeAuditLogService";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const toOid = (id: string) => new Types.ObjectId(id);
@@ -240,6 +241,7 @@ export const confirmDeliveryFeeImport = async (req: AuthenticatedRequest, res: R
         }
 
         await DeliveryFeeImportModel.findByIdAndDelete(importId);
+        auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "delivery_fee_import", resourceId: new Types.ObjectId(importId), details: { mode: action, inserted, reactivated, updated, importId } });
         return sendResponse(res, 200, "Import confirmed successfully.", { inserted, reactivated, updated });
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -247,7 +249,7 @@ export const confirmDeliveryFeeImport = async (req: AuthenticatedRequest, res: R
 };
 
 // ─── POST /delivery-fees ──────────────────────────────────────────────────────
-export const createDeliveryFee = async (req: Request, res: Response) => {
+export const createDeliveryFee = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { pickupStateId, pickupCityId, destinationStateId, destinationCityId, baseFee, multiplier } = req.body;
 
@@ -270,6 +272,7 @@ export const createDeliveryFee = async (req: Request, res: Response) => {
                 baseFee: Number(baseFee),
                 multiplier: Number(multiplier) || 0,
             });
+            auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "delivery_fee", resourceId: existing._id!, details: { pickupStateId, pickupCityId, destinationStateId, destinationCityId, baseFee, reactivated: true } });
             return sendResponse(res, 200, "Delivery fee re-activated successfully.", reactivated);
         }
 
@@ -283,6 +286,7 @@ export const createDeliveryFee = async (req: Request, res: Response) => {
             status: "active",
         } as any);
 
+        auditLog.log({ action: "create", performedBy: req.user!.userId, resource: "delivery_fee", resourceId: fee._id!, details: { pickupStateId, pickupCityId, destinationStateId, destinationCityId, baseFee } });
         return sendResponse(res, 201, "Delivery fee created successfully.", fee);
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -290,7 +294,7 @@ export const createDeliveryFee = async (req: Request, res: Response) => {
 };
 
 // ─── PATCH /delivery-fees/:id ─────────────────────────────────────────────────
-export const updateDeliveryFee = async (req: Request, res: Response) => {
+export const updateDeliveryFee = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const { pickupStateId, pickupCityId, destinationStateId, destinationCityId, baseFee, multiplier } = req.body;
@@ -321,6 +325,14 @@ export const updateDeliveryFee = async (req: Request, res: Response) => {
             }
         }
 
+        const changedFields: Record<string, any> = {};
+        if (pickupStateId) changedFields.pickupStateId = pickupStateId;
+        if (pickupCityId) changedFields.pickupCityId = pickupCityId;
+        if (destinationStateId) changedFields.destinationStateId = destinationStateId;
+        if (destinationCityId) changedFields.destinationCityId = destinationCityId;
+        if (baseFee !== undefined) changedFields.baseFee = Number(baseFee);
+        if (multiplier !== undefined) changedFields.multiplier = Number(multiplier);
+
         const updated = await deliveryFeeService.update(id, {
             pickupState: newPickupState as any,
             pickupCity: newPickupCity as any,
@@ -330,6 +342,7 @@ export const updateDeliveryFee = async (req: Request, res: Response) => {
             ...(multiplier !== undefined && { multiplier: Number(multiplier) }),
         });
 
+        auditLog.log({ action: "update", performedBy: req.user!.userId, resource: "delivery_fee", resourceId: id, details: { changedFields } });
         return sendResponse(res, 200, "Delivery fee updated successfully.", updated);
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
@@ -337,12 +350,13 @@ export const updateDeliveryFee = async (req: Request, res: Response) => {
 };
 
 // ─── DELETE /delivery-fees/:id ────────────────────────────────────────────────
-export const deleteDeliveryFee = async (req: Request, res: Response) => {
+export const deleteDeliveryFee = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const existing = await deliveryFeeService.getById(id);
         if (!existing || existing.status === "inactive") return ErrorHandler.notFound(res, "Delivery fee not found.");
         await deliveryFeeService.softDelete(id);
+        auditLog.log({ action: "delete", performedBy: req.user!.userId, resource: "delivery_fee", resourceId: id, details: { pickupState: existing.pickupState?.toString(), pickupCity: existing.pickupCity?.toString(), destinationState: existing.destinationState?.toString(), destinationCity: existing.destinationCity?.toString() } });
         return sendResponse(res, 200, "Delivery fee deleted successfully.");
     } catch (error: any) {
         return ErrorHandler.internalServerError(res, error.message);
