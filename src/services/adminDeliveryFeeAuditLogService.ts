@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import { AdminDeliveryFeeAuditLogModel } from "../models/adminDeliveryFeeAuditLogModel";
 import { IAdminDeliveryFeeAuditLog } from "../interfaces/modelInterface";
+import "../models/adminModel"; // ensure Admin model is registered for populate
 
 type LogEntry = {
     action: "create" | "update" | "delete";
