@@ -10,7 +10,7 @@ const AdminDeliveryFeeAuditLogSchema = new Schema<IAdminDeliveryFeeAuditLog>(
         },
         performedBy: {
             type: Schema.Types.ObjectId,
-            ref: "Admin",
+            ref: "User",
             required: true,
         },
         resource: {
