@@ -750,7 +750,7 @@ export const computeDeliveryFee = async (
   console.log("computeDeliveryFee IDs", pickupStateId, pickupCityId, destinationStateId, destinationCityId, totalQuantity);
 
   // 1. Check destinationState is delivery-covered
-  const destinationState = await StateModel.findOne({ _id: destinationStateId, status: "active", deliveryCovered: true });
+  const destinationState = await StateModel.findOne({ _id: destinationStateId, status: "active" });
   if (!destinationState) {
     throw new Error(
       `We currently do not deliver to the selected destination state. Please check available delivery locations.`
