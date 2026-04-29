@@ -292,3 +292,28 @@ export const getDeliveryCoveredStates = async (_req: Request, res: Response): Pr
         return ErrorHandler.internalServerError(res, error.message);
     }
 };
+
+/**
+ * Public — checks whether a specific state has delivery covered.
+ * GET /states/:stateId/delivery-covered
+ */
+export const checkStateDeliveryCoverage = async (req: Request, res: Response): Promise<Response | undefined> => {
+    try {
+        const { stateId } = req.params;
+        const state = await StateModel.findById(stateId).select("name normalizedName deliveryCovered status").lean();
+
+        if (!state) {
+            return sendResponse(res, 404, "State not found.", null);
+        }
+
+        const covered = state.status === "active" && state.deliveryCovered === true;
+        return sendResponse(res, 200, "State delivery coverage fetched.", {
+            stateId,
+            name: state.name,
+            normalizedName: state.normalizedName,
+            deliveryCovered: covered,
+        });
+    } catch (error: any) {
+        return ErrorHandler.internalServerError(res, error.message);
+    }
+};

@@ -9,6 +9,7 @@ import {
     deleteCity,
     toggleDeliveryCovered,
     getDeliveryCoveredStates,
+    checkStateDeliveryCoverage,
 } from "../controllers/adminStateController";
 
 const router = Router();
@@ -28,5 +29,6 @@ router.delete("/admin/states/:stateId/cities/:cityId", authenticate, authorizeRo
 // ── Delivery Coverage ────────────────────────────────────────────────────
 router.patch("/admin/states/:stateId/delivery-covered", authenticate, authorizeRole("admin"), toggleDeliveryCovered);
 router.get("/states/delivery-covered", getDeliveryCoveredStates);
+router.get("/states/:stateId/delivery-covered", checkStateDeliveryCoverage);
 
 export default router;

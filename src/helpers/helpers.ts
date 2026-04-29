@@ -11,7 +11,7 @@ import dotenv from "dotenv";
 import crypto from 'crypto';
 import { ErrorHandler } from '../utils/errorHandler/errorHandler';
 import { IOrder, IOrderItem, IPackageDeliveryInfo } from "../interfaces/modelInterface";
-import { ObjectId } from "mongoose";
+import { ObjectId, Types } from "mongoose";
 import redisClient from "../config/redisConfig";
 import { ExchangeRateModel } from "../models/exchangeRateModel";
 dotenv.config();
@@ -768,12 +768,13 @@ export const computeDeliveryFee = async (
 
   // 2. Exact match
   let feeRecord = await DeliveryFee.findOne({
-    pickupState: pickupStateId,
-    pickupCity: pickupCityId,
-    destinationState: destinationStateId,
-    destinationCity: destinationCityId,
+    pickupState: new Types.ObjectId(pickupStateId),
+    pickupCity: new Types.ObjectId(pickupCityId),
+    destinationState: new Types.ObjectId(destinationStateId),
+    destinationCity: new Types.ObjectId(destinationCityId),
     status: "active",
   });
+  console.log("Exact match feeRecord", feeRecord);
 
   // 3. Fallback: destination city → "others"
   if (!feeRecord && destOthersId) {

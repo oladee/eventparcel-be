@@ -978,6 +978,8 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             if (!pickupDetail)
                 return ErrorHandler.badUserInput(res, "Pickup details not found for this event.");
 
+            console.log("Pickup Detail for Delivery Fee Calculation: ", pickupDetail);
+
             const pickupStateId = pickupDetail.state?.toString();
             const pickupCityId = pickupDetail.city?.toString();
             const guestStateId = state.trim();

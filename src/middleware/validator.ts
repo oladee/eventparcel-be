@@ -857,15 +857,11 @@ const validatePaymentAndDelivery = (data: IPaymentAndDelivery): ValidationResult
         'number.base': 'Longitude must be a valid number',
         'number.range': 'Longitude must be between -180 and 180'
       }),
-    state: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "State must be at least 3 characters",
-      "string.max": "State must be at most 60 characters",
-      "string.pattern.base": "State must contain only letters",
+    state: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "State must be a valid ObjectId",
     }),
-    city: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "City must be at least 3 characters",
-      "string.max": "City must be at most 60 characters",
-      "string.pattern.base": "City must contain only letters",
+    city: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "City must be a valid ObjectId",
     }),
     deliveryDate: Joi.date().iso().optional().messages({
       "date.base": "Delivery date must be a valid date",
@@ -972,16 +968,12 @@ const validateOptionalPaymentAndDeliveryUpdate = (
         'number.range': 'Longitude must be between -180 and 180',
       }),
 
-    state: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "State must be at least 3 characters",
-      "string.max": "State must be at most 60 characters",
-      "string.pattern.base": "State must contain only letters",
+    state: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "State must be a valid ObjectId",
     }),
 
-    city: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "City must be at least 3 characters",
-      "string.max": "City must be at most 60 characters",
-      "string.pattern.base": "City must contain only letters",
+    city: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "City must be a valid ObjectId",
     }),
 
     deliveryDate: Joi.date().iso().optional().messages({
@@ -1102,16 +1094,12 @@ const validatePaymentAndDeliveryUpdate = (
         "number.range": "Longitude must be between -180 and 180",
       }),
 
-    state: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "State must be at least 3 characters",
-      "string.max": "State must be at most 60 characters",
-      "string.pattern.base": "State must contain only letters",
+    state: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "State must be a valid ObjectId",
     }),
 
-    city: Joi.string().min(3).max(60).pattern(/^[A-Za-z ]+$/).optional().messages({
-      "string.min": "City must be at least 3 characters",
-      "string.max": "City must be at most 60 characters",
-      "string.pattern.base": "City must contain only letters",
+    city: Joi.string().pattern(/^[a-fA-F0-9]{24}$/).optional().messages({
+      "string.pattern.base": "City must be a valid ObjectId",
     }),
 
     deliveryDate: Joi.string()
