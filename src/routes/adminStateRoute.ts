@@ -15,13 +15,13 @@ const router = Router();
 
 // ── States ──────────────────────────────────────────────────────────────
 router.post("/admin/states", authenticate, authorizeRole("admin"), createState);
-router.get("/admin/states", authenticate, authorizeRole("admin"), getStates);
+router.get("/states", getStates);
 // router.patch("/admin/states/:stateId", authenticate, authorizeRole("admin"), updateState);
 router.delete("/admin/states/:stateId", authenticate, authorizeRole("admin"), deleteState);
 
 // ── Cities ───────────────────────────────────────────────────────────────
 router.post("/admin/states/:stateId/cities", authenticate, authorizeRole("admin"), createCity);
-router.get("/admin/states/:stateId/cities", authenticate, authorizeRole("admin"), getCitiesByState);
+router.get("/states/:stateId/cities", getCitiesByState);
 // router.patch("/admin/states/:stateId/cities/:cityId", authenticate, authorizeRole("admin"), updateCity);
 router.delete("/admin/states/:stateId/cities/:cityId", authenticate, authorizeRole("admin"), deleteCity);
 
