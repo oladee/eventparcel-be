@@ -115,8 +115,8 @@ export const importDeliveryFeePreview = async (req: AuthenticatedRequest, res: R
             const pickupCityName = row.getCell(2).text.trim();
             const destStateName = row.getCell(3).text.trim();
             const destCityName = row.getCell(4).text.trim();
-            const baseFee = Number(row.getCell(5).text.trim());
-            const multiplier = Number(row.getCell(6).text.trim()) || 0;
+            let baseFee = Number(row.getCell(5).text.trim());
+            let multiplier = Number(row.getCell(6).text.trim());
 
             if (!pickupStateName && !pickupCityName && !destStateName && !destCityName) return;
 
@@ -129,7 +129,8 @@ export const importDeliveryFeePreview = async (req: AuthenticatedRequest, res: R
             if (!pickupCityId) { errors.push(`Row ${rowIndex}: Pickup city "${pickupCityName}" not found.`); return; }
             if (!destStateId) { errors.push(`Row ${rowIndex}: Destination state "${destStateName}" not found.`); return; }
             if (!destCityId) { errors.push(`Row ${rowIndex}: Destination city "${destCityName}" not found.`); return; }
-            if (!baseFee || isNaN(baseFee)) { errors.push(`Row ${rowIndex}: Base fee is missing or invalid.`); return; }
+            if (isNaN(baseFee) || baseFee < 0) baseFee = 0;
+            if (isNaN(multiplier) || multiplier < 0) multiplier = 0;
 
             previewRows.push({
                 pickupState: toOid(pickupStateId),
