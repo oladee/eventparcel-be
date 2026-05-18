@@ -26,6 +26,9 @@ import {
 import { sendResponse } from "../utils/ApiHandler/ApiResponse";
 import { ErrorHandler } from "../utils/errorHandler/errorHandler";
 import mongoose, { Types } from "mongoose";
+import { getAllowHostToPassServiceFeeToGuest } from "../models/serviceFeeRateModel";
+import { SouvenirListingModel } from "../models/souvenirListingModel";
+import { CustomBagListingModel } from "../models/customBagListingModel";
 import { OptionalAuthenticateRequest } from "../middleware/optionalAuthenticate";
 import ActivityLogService from "../services/activityLogService";
 import { IEventGroup, IPackage } from "../interfaces/modelInterface";
@@ -841,6 +844,17 @@ export const createEventGroup = async (
       isDraft,
     } = req.body;
 
+    let guestFeeApplied = !!req.body.serviceFeeAppliedToGuest;
+    if (guestFeeApplied) {
+      const allowed = await getAllowHostToPassServiceFeeToGuest();
+      if (!allowed) {
+        return ErrorHandler.forbidden(
+          res,
+          "Passing the service fee to guests is disabled by the platform."
+        );
+      }
+    }
+
     const event = await EventService.getEventById(eventId);
     if (!event) {
       return ErrorHandler.notFound(res, "Event not found!");
@@ -881,6 +895,7 @@ export const createEventGroup = async (
       groupPrivacy: groupPrivacy,
       event: eventId,
       isDraft,
+      serviceFeeAppliedToGuest: guestFeeApplied,
     });
 
     // Now we push it inside the event for reference
@@ -897,7 +912,7 @@ export const createEventGroup = async (
 
     // Update event currency flags
     if (groupCurrency === "NGN") event.isNairaAccount = true;
-    if (groupCurrency === "USD" || groupCurrency === "CAD")
+    if (groupCurrency === "USD" || groupCurrency === "CAD" || groupCurrency === "GBP")
       event.isDollarAccount = true;
     await event.save();
 
@@ -1136,6 +1151,22 @@ export const updateEventGroup = async (
       return ErrorHandler.notFound(res, "Event Group not found!");
     }
 
+    const prevGuest = !!(eventGroup as IEventGroup).serviceFeeAppliedToGuest;
+    const nextGuest =
+      req.body.serviceFeeAppliedToGuest !== undefined
+        ? !!req.body.serviceFeeAppliedToGuest
+        : prevGuest;
+
+    if (nextGuest && !prevGuest) {
+      const allowed = await getAllowHostToPassServiceFeeToGuest();
+      if (!allowed) {
+        return ErrorHandler.forbidden(
+          res,
+          "Passing the service fee to guests is disabled by the platform."
+        );
+      }
+    }
+
     const eventGroupData = {
       groupName: req.body.groupName || eventGroup.groupName,
       groupDescription:
@@ -1143,6 +1174,7 @@ export const updateEventGroup = async (
       groupCurrency: req.body.groupCurrency || eventGroup.groupCurrency,
       groupPrivacy: req.body.groupPrivacy || eventGroup.groupPrivacy,
       isDraft: false,
+      serviceFeeAppliedToGuest: nextGuest,
     };
 
     // Check if the event group name already exists
@@ -1208,8 +1240,8 @@ export const updateEventGroup = async (
     const hasNairaGroups = allEventGroups.some(
       (group: any) => group.groupCurrency === "NGN"
     );
-    const hasDollarGroups = allEventGroups.some(
-      (group: any) => group.groupCurrency === "USD"
+    const hasDollarGroups = allEventGroups.some((group: any) =>
+      ["USD", "CAD", "GBP"].includes(group.groupCurrency)
     );
 
     event.isNairaAccount = hasNairaGroups;
@@ -1398,7 +1430,10 @@ export const deleteEventGroup = async (
       updatedEvent.isNairaAccount = false;
       changed = true;
     }
-    if (deletedGroup.groupCurrency === "USD" && updatedEvent.isDollarAccount) {
+    if (
+      ["USD", "GBP", "CAD"].includes(deletedGroup.groupCurrency) &&
+      updatedEvent.isDollarAccount
+    ) {
       updatedEvent.isDollarAccount = false;
       changed = true;
     }
@@ -1475,6 +1510,8 @@ export const cloneEventGroup = async (
       groupCurrency: originalEventGroup.groupCurrency,
       groupPrivacy: originalEventGroup.groupPrivacy,
       event: new mongoose.Types.ObjectId(originalEventGroup.event),
+      serviceFeeAppliedToGuest:
+        !!(originalEventGroup as IEventGroup).serviceFeeAppliedToGuest,
     });
 
     // Add the cloned group to the event
@@ -1545,6 +1582,8 @@ export const cloneEventGroup = async (
           eventGroup: new mongoose.Types.ObjectId(clonedEventGroup._id),
           packageImgUrls: originalPackage.packageImgUrls, // Keep existing images
           packageImgPublicIds: originalPackage.packageImgPublicIds, // Keep existing Cloudinary IDs
+          souvenirListing: originalPackage.souvenirListing ?? undefined,
+          customBagListing: originalPackage.customBagListing ?? undefined,
         });
 
         // Add cloned package to cloned EventGroup
@@ -1593,6 +1632,8 @@ export const createPackage = async (
       packageDelivery,
       packageSize,
       isDraft,
+      souvenirListingId,
+      customBagListingId,
     } = req.body;
 
     // Check if the Package title already exists
@@ -1615,6 +1656,46 @@ export const createPackage = async (
 
     const event = await EventService.getEventById(eventId);
     if (!event) return ErrorHandler.notFound(res, "Event not found!");
+
+    const gc = (eventGroup.groupCurrency || "").toUpperCase();
+
+    let souvenirListing: mongoose.Types.ObjectId | undefined;
+    if (souvenirListingId) {
+      const sid = String(souvenirListingId).trim();
+      if (!mongoose.Types.ObjectId.isValid(sid)) {
+        return ErrorHandler.badUserInput(res, "Invalid souvenirListingId.");
+      }
+      const doc = await SouvenirListingModel.findById(sid);
+      if (!doc || doc.isActive === false) {
+        return ErrorHandler.badUserInput(res, "Invalid or inactive souvenir listing.");
+      }
+      if (doc.currency !== gc) {
+        return ErrorHandler.badUserInput(
+          res,
+          "Souvenir listing currency must match the group's currency."
+        );
+      }
+      souvenirListing = doc._id;
+    }
+
+    let customBagListing: mongoose.Types.ObjectId | undefined;
+    if (customBagListingId) {
+      const bid = String(customBagListingId).trim();
+      if (!mongoose.Types.ObjectId.isValid(bid)) {
+        return ErrorHandler.badUserInput(res, "Invalid customBagListingId.");
+      }
+      const doc = await CustomBagListingModel.findById(bid);
+      if (!doc || doc.isActive === false) {
+        return ErrorHandler.badUserInput(res, "Invalid or inactive custom bag listing.");
+      }
+      if (doc.currency !== gc) {
+        return ErrorHandler.badUserInput(
+          res,
+          "Custom bag listing currency must match the group's currency."
+        );
+      }
+      customBagListing = doc._id;
+    }
 
     // Check if images were uploaded
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
@@ -1724,9 +1805,9 @@ export const createPackage = async (
       return ErrorHandler.badUserInput(res, "You cannot select both Self-delivery and Platform Delivery in the same package.");
     }
 
-    // Validation: Platform Delivery disabled for dollar-based groups
-    if (eventGroup.groupCurrency === "USD" && hasPlatformDelivery) {
-      return ErrorHandler.badUserInput(res, "Platform Delivery is not available for dollar-based groups.");
+    // Validation: Platform Delivery disabled for non-Naira groups (USD / GBP)
+    if (["USD", "GBP"].includes(eventGroup.groupCurrency) && hasPlatformDelivery) {
+      return ErrorHandler.badUserInput(res, "Platform Delivery is not available for non-Naira groups.");
     }
 
     // Validate allowed options
@@ -1767,6 +1848,8 @@ export const createPackage = async (
       packageSize: packageWeight,
       isDraft,
       packageStatus: normalizedPackageStatus,
+      souvenirListing,
+      customBagListing,
     });
 
     // Now we push it inside the eventGroup for reference
@@ -2170,6 +2253,8 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
       packageSize,
       isDraft,
       packageStatus,
+      souvenirListingId,
+      customBagListingId,
     } = req.body;
 
     const { userId, role } = req.user || {};
@@ -2318,8 +2403,8 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
         return ErrorHandler.badUserInput(res, "You cannot select both Self-delivery and Platform Delivery in the same package.");
       }
 
-      if (eventGroup.groupCurrency === "USD" && hasPlatformDelivery) {
-        return ErrorHandler.badUserInput(res, "Platform Delivery is not available for dollar-based groups.");
+      if (["USD", "GBP"].includes(eventGroup.groupCurrency) && hasPlatformDelivery) {
+        return ErrorHandler.badUserInput(res, "Platform Delivery is not available for non-Naira groups.");
       }
 
       const allowedOptions = ["selfManaged", "platformDelivery", "pickUp"];
@@ -2379,7 +2464,55 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
           ? "active"
           : existingPackage.packageStatus || (existingPackage.isDraft ? "draft" : "active"));
 
-    const packageData = {
+    const gc = (eventGroup.groupCurrency || "").toUpperCase();
+
+    let resolvedSouvenirListing: mongoose.Types.ObjectId | null | undefined = undefined;
+    if (souvenirListingId !== undefined) {
+      if (!souvenirListingId || souvenirListingId === "") {
+        resolvedSouvenirListing = null;
+      } else {
+        const sid = String(souvenirListingId).trim();
+        if (!mongoose.Types.ObjectId.isValid(sid)) {
+          return ErrorHandler.badUserInput(res, "Invalid souvenirListingId.");
+        }
+        const doc = await SouvenirListingModel.findById(sid);
+        if (!doc || doc.isActive === false) {
+          return ErrorHandler.badUserInput(res, "Invalid or inactive souvenir listing.");
+        }
+        if (doc.currency !== gc) {
+          return ErrorHandler.badUserInput(
+            res,
+            "Souvenir listing currency must match the group's currency."
+          );
+        }
+        resolvedSouvenirListing = doc._id as mongoose.Types.ObjectId;
+      }
+    }
+
+    let resolvedCustomBagListing: mongoose.Types.ObjectId | null | undefined = undefined;
+    if (customBagListingId !== undefined) {
+      if (!customBagListingId || customBagListingId === "") {
+        resolvedCustomBagListing = null;
+      } else {
+        const bid = String(customBagListingId).trim();
+        if (!mongoose.Types.ObjectId.isValid(bid)) {
+          return ErrorHandler.badUserInput(res, "Invalid customBagListingId.");
+        }
+        const doc = await CustomBagListingModel.findById(bid);
+        if (!doc || doc.isActive === false) {
+          return ErrorHandler.badUserInput(res, "Invalid or inactive custom bag listing.");
+        }
+        if (doc.currency !== gc) {
+          return ErrorHandler.badUserInput(
+            res,
+            "Custom bag listing currency must match the group's currency."
+          );
+        }
+        resolvedCustomBagListing = doc._id as mongoose.Types.ObjectId;
+      }
+    }
+
+    const packageData: Record<string, unknown> = {
       packageTitle: packageTitle ? packageTitle.toLowerCase() : existingPackage.packageTitle,
       packageDescription: packageDescription || existingPackage.packageDescription,
       packagePrice: packagePrice || existingPackage.packagePrice,
@@ -2391,6 +2524,13 @@ export const updatePackage = async (req: OptionalAuthenticateRequest, res: Respo
       packageStatus: normalizedPackageStatus,
       isDraft: normalizedPackageStatus === "draft",
     };
+
+    if (resolvedSouvenirListing !== undefined) {
+      packageData.souvenirListing = resolvedSouvenirListing;
+    }
+    if (resolvedCustomBagListing !== undefined) {
+      packageData.customBagListing = resolvedCustomBagListing;
+    }
 
     // Update package details
     const updatedPackage = await PackageService.updatePackageById(packageId, packageData, true);

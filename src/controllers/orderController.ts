@@ -17,7 +17,11 @@ import { NotificationService } from "../services/notificationServices";
 import { ref } from "@hapi/joi";
 import { OptionalAuthenticateRequest } from "../middleware/optionalAuthenticate";
 import ActivityLogService from "../services/activityLogService";
-import { computeDeliveryFee, convertNgnToUsd, convertUsdToNgn, formatPrice, hasPlatformHomeDelivery, hasPlatformHomeDelivery2, stripCountryCode, titleCase, toTitleCase } from "../helpers/helpers";
+import { computeDeliveryFee, convertNgnToCheckoutCurrency, convertNgnToUsd, convertUsdToNgn, formatPrice, hasPlatformHomeDelivery, hasPlatformHomeDelivery2, stripCountryCode, titleCase, toTitleCase } from "../helpers/helpers";
+import { computePlatformTxnFee } from "../helpers/serviceFeeHelpers";
+import { ServiceFeeRateModel } from "../models/serviceFeeRateModel";
+import { SouvenirListingModel } from "../models/souvenirListingModel";
+import { CustomBagListingModel } from "../models/customBagListingModel";
 import { sendMail } from "../utils/emailHandler/email";
 import { notificationEmail } from "../utils/emailHandler/notificationEmailTemplate";
 
@@ -844,17 +848,29 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             return ErrorHandler.badUserInput(res, "Guest information is incomplete!");
         }
 
-        // ❌ Block USD-based orders for home delivery or platformDelivery
-        if ((deliveryType === "homeDelivery" || deliveryType === "platformDelivery")) {
-            const hasDollarItems = items.some(
-                (item: any) =>
-                    item.packagePriceCurrency === "USD" || item.currency === "USD"
-            );
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return ErrorHandler.badUserInput(res, "At least one package must be selected!");
+        }
 
-            if (hasDollarItems) {
+        const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
+        if (!eventGroup) return ErrorHandler.notFound(res, "Event Group not found!");
+        if (eventGroup.isDisabled)
+            return ErrorHandler.forbidden(res, "Sorry, this event group has been disabled!");
+
+        const anchor = (eventGroup.groupCurrency || "").toUpperCase();
+        if (!["NGN", "USD", "GBP"].includes(anchor)) {
+            return ErrorHandler.badUserInput(
+                res,
+                "Unsupported group currency. Only NGN, USD, and GBP are allowed."
+            );
+        }
+
+        // ❌ Platform / covered home delivery only for Naira groups
+        if ((deliveryType === "homeDelivery" || deliveryType === "platformDelivery")) {
+            if (anchor !== "NGN") {
                 return ErrorHandler.badUserInput(
                     res,
-                    "We are currently unable to cover deliveries for dollar-based purchases."
+                    "We are currently unable to cover deliveries for non-Naira purchases."
                 );
             }
 
@@ -865,15 +881,6 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
                 );
             }
         }
-
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return ErrorHandler.badUserInput(res, "At least one package must be selected!");
-        }
-
-        const eventGroup = await EventGroupService.getEventGroupById(eventGroupId);
-        if (!eventGroup) return ErrorHandler.notFound(res, "Event Group not found!");
-        if (eventGroup.isDisabled)
-            return ErrorHandler.forbidden(res, "Sorry, this event group has been disabled!");
 
         const event = await EventService.getEventById(eventId);
         if (!event) return ErrorHandler.notFound(res, "Event not found!");
@@ -887,9 +894,9 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
 
         let totalAmount = 0;
         let itemTotal = 0;
-        let packageDetails: IOrderItem[] = [];
+        const packageDetails: IOrderItem[] = [];
         let eventPackages: IPackage[] = [];
-        let orderCurrency: "NGN" | "USD" | null = null;
+        const orderCurrency = anchor as "NGN" | "USD" | "GBP";
 
         for (const pkg of items) {
             const { packageId, quantity, deliveryMethod } = pkg;
@@ -905,6 +912,18 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             if (!eventPackage)
                 return ErrorHandler.notFound(res, `Package with ID ${packageId} not found!`);
 
+            const pkgEg =
+                typeof eventPackage.eventGroup === "object" &&
+                (eventPackage.eventGroup as { _id?: mongoose.Types.ObjectId })?._id
+                    ? (eventPackage.eventGroup as { _id: mongoose.Types.ObjectId })._id.toString()
+                    : String(eventPackage.eventGroup);
+            if (pkgEg !== eventGroupId) {
+                return ErrorHandler.badUserInput(
+                    res,
+                    "Each package must belong to this event group."
+                );
+            }
+
             if (
                 typeof eventPackage.packageQuantity === "number" &&
                 quantity > eventPackage.packageQuantity
@@ -916,52 +935,95 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             }
 
             const packageCurrency = (eventPackage.packagePriceCurrency || "").toUpperCase();
-            if (!["NGN", "USD"].includes(packageCurrency)) {
-                return ErrorHandler.badUserInput(
-                    res,
-                    "Unsupported package currency. Only NGN and USD are allowed."
-                );
-            }
-            console.log(`Package ${eventPackage.packageTitle} currency: ${packageCurrency}`);
-            if (!orderCurrency) {
-                orderCurrency = packageCurrency as "NGN" | "USD";
+
+            if (anchor === "GBP") {
+                if (packageCurrency !== "GBP") {
+                    return ErrorHandler.badUserInput(
+                        res,
+                        "This group settles in GBP; every package must be priced in GBP."
+                    );
+                }
+            } else if (anchor === "NGN") {
+                if (!["NGN", "USD"].includes(packageCurrency)) {
+                    return ErrorHandler.badUserInput(
+                        res,
+                        "Unsupported package currency for this group."
+                    );
+                }
+            } else if (anchor === "USD") {
+                if (!["NGN", "USD"].includes(packageCurrency)) {
+                    return ErrorHandler.badUserInput(
+                        res,
+                        "Unsupported package currency for this group."
+                    );
+                }
             }
 
             let normalizedPackagePrice = eventPackage.packagePrice;
-            let normalizedPackageCurrency = packageCurrency as "NGN" | "USD";
 
-            if (orderCurrency === "USD" && packageCurrency === "NGN") {
-                normalizedPackagePrice = await convertNgnToUsd(eventPackage.packagePrice);
-                normalizedPackageCurrency = "USD";
-            } else if (orderCurrency === "NGN" && packageCurrency === "USD") {
-                normalizedPackagePrice = await convertUsdToNgn(eventPackage.packagePrice);
-                normalizedPackageCurrency = "NGN";
+            if (anchor === "USD" && packageCurrency === "NGN") {
+                normalizedPackagePrice = Number(await convertNgnToUsd(eventPackage.packagePrice));
+            } else if (anchor === "NGN" && packageCurrency === "USD") {
+                normalizedPackagePrice = Number(await convertUsdToNgn(eventPackage.packagePrice));
+            } else if (packageCurrency !== anchor) {
+                return ErrorHandler.badUserInput(
+                    res,
+                    `Package currency ${packageCurrency} does not match group currency ${anchor}.`
+                );
             }
 
             totalAmount += normalizedPackagePrice * quantity;
 
-            packageDetails.push({
+            const line: Record<string, unknown> = {
                 packageId: new mongoose.Types.ObjectId(eventPackage._id),
                 packageImgUrls: eventPackage.packageImgUrls,
                 packageImgPublicIds: eventPackage.packageImgPublicIds,
                 packageTitle: eventPackage.packageTitle,
                 packageDescription: eventPackage.packageDescription,
-                packagePriceCurrency: normalizedPackageCurrency,
+                packagePriceCurrency: orderCurrency,
                 packagePrice: normalizedPackagePrice,
                 quantity: Number(quantity),
                 deliveryMethod: deliveryMethod || null,
                 packageDeliveryType: eventPackage.packageDelivery,
                 packageSize: eventPackage.packageSize || null,
-            } as IOrderItem);
+            };
+
+            const souvenirRef = (eventPackage as IPackage & { souvenirListing?: mongoose.Types.ObjectId })
+                .souvenirListing;
+            if (souvenirRef) {
+                const listing = await SouvenirListingModel.findById(souvenirRef).lean();
+                if (listing && listing.isActive !== false) {
+                    line.fulfillmentSouvenir = {
+                        listingId: listing._id,
+                        tierName: listing.tierName,
+                        price: listing.price,
+                        currency: listing.currency,
+                        description: listing.description || "",
+                    };
+                }
+            }
+
+            const bagRef = (eventPackage as IPackage & { customBagListing?: mongoose.Types.ObjectId })
+                .customBagListing;
+            if (bagRef) {
+                const listing = await CustomBagListingModel.findById(bagRef).lean();
+                if (listing && listing.isActive !== false) {
+                    line.fulfillmentCustomBag = {
+                        listingId: listing._id,
+                        tierName: listing.tierName,
+                        price: listing.price,
+                        currency: listing.currency,
+                        description: listing.description || "",
+                    };
+                }
+            }
+
+            packageDetails.push(line as unknown as IOrderItem);
 
             eventPackages.push(eventPackage);
         }
 
-        itemTotal = totalAmount; // Store the original item total before adding fees and taxes
-
-        if (!orderCurrency) {
-            return ErrorHandler.badUserInput(res, "Unable to determine order currency.");
-        }
+        itemTotal = totalAmount;
 
         let homeDeliveryFee = 0;
         let pickUpDetails;
@@ -986,11 +1048,10 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             const guestCityId = city.trim();
 
             const totalPackages = items.reduce(
-                (sum: number, pkg: any) => sum + pkg.quantity,
+                (sum: number, pkgItem: { quantity: number }) => sum + pkgItem.quantity,
                 0
             );
 
-            // Compute delivery fee
             const computedDeliveryFee = await computeDeliveryFee(
                 pickupStateId as string,
                 pickupCityId as string,
@@ -1031,15 +1092,17 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             };
         }
 
-        // 💵 Convert delivery fee to USD if needed
         const newHomeDeliveryFeeByCurrency =
-            orderCurrency === "USD"
-                ? Number(await convertNgnToUsd(homeDeliveryFee)).toFixed(1)
-                : homeDeliveryFee;
+            orderCurrency === "NGN"
+                ? homeDeliveryFee
+                : Number(
+                      (
+                          await convertNgnToCheckoutCurrency(homeDeliveryFee, orderCurrency)
+                      ).toFixed(orderCurrency === "USD" ? 1 : 2)
+                  );
 
-        // 💰 Transaction fee estimation
-        const estimateTransactionFee = (amount: number, currency: string): number => {
-            if (currency === "USD") return amount * 0.0349 + 0.49;
+        const estimatePaymentProcessingFee = (amount: number, currency: string): number => {
+            if (currency === "USD" || currency === "GBP") return amount * 0.0349 + 0.49;
             if (currency === "NGN") {
                 const fee = amount * 0.015;
                 return amount > 2500 ? fee + 100 : fee;
@@ -1048,7 +1111,7 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         };
 
         const getMinimumPlatformMargin = (currency: string): number => {
-            if (currency === "USD") return 1.0;
+            if (currency === "USD" || currency === "GBP") return 1.0;
             if (currency === "NGN") return 100;
             return 0;
         };
@@ -1056,20 +1119,32 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
         const deliveryFee = Number(newHomeDeliveryFeeByCurrency) || 0;
         console.log("Delivery Fee for Order: ", deliveryFee);
         const MIN_PLATFORM_MARGIN = getMinimumPlatformMargin(orderCurrency);
-        const estimatedTransactionFee = estimateTransactionFee(totalAmount, orderCurrency);
+        const paymentProcessingFeeEstimate = estimatePaymentProcessingFee(itemTotal, orderCurrency);
 
-        const VAT_tax = Number((totalAmount * taxRate).toFixed(2)) || 0;
-        
-        totalAmount += VAT_tax + Number(newHomeDeliveryFeeByCurrency) + estimatedTransactionFee;
+        const rateDoc = await ServiceFeeRateModel.findOne({
+            currency: orderCurrency,
+        }).lean();
+        const platformTxnFee = computePlatformTxnFee(itemTotal, rateDoc);
 
-        if (
-            totalAmount <
-            Number(deliveryFee) + estimatedTransactionFee + MIN_PLATFORM_MARGIN
-        ) {
+        const guestBearsServiceFee = !!(eventGroup as { serviceFeeAppliedToGuest?: boolean })
+            .serviceFeeAppliedToGuest;
+
+        const VAT_tax = Number((itemTotal * taxRate).toFixed(2)) || 0;
+
+        totalAmount =
+            itemTotal +
+            VAT_tax +
+            Number(newHomeDeliveryFeeByCurrency) +
+            paymentProcessingFeeEstimate +
+            (guestBearsServiceFee ? platformTxnFee : 0);
+
+        const feesForMarginCheck =
+            paymentProcessingFeeEstimate + (guestBearsServiceFee ? platformTxnFee : 0);
+
+        if (totalAmount < Number(deliveryFee) + feesForMarginCheck + MIN_PLATFORM_MARGIN) {
             return ErrorHandler.badUserInput(res, "Insufficient total amount to cover costs.");
         }
 
-        // ✅ Create order
         const order = await OrderService.createOrder({
             orderId: "",
             guestFirstName,
@@ -1089,8 +1164,11 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             city,
             dispatchType,
             homeDeliveryFee: newHomeDeliveryFeeByCurrency || undefined,
-            txnFee: estimatedTransactionFee,
-            itemTotal, // Original package total before fees and taxes
+            txnFee: platformTxnFee,
+            paymentProcessingFeeEstimate,
+            serviceFeeAppliedToGuest: guestBearsServiceFee,
+            checkoutFeeSchema: 2,
+            itemTotal,
             deliveryType,
             tax: VAT_tax,
             paymentStatus: "pending",
@@ -1098,19 +1176,12 @@ export const checkoutGuest = async (req: Request, res: Response): Promise<Respon
             pickUpDetails,
         } as Partial<IOrder> as IOrder);
 
-        if (!["NGN", "USD"].includes(orderCurrency)) {
-            return ErrorHandler.badUserInput(
-                res,
-                "Unsupported or undefined currency. Only NGN and USD are allowed."
-            );
-        }
-
         const orderResponse = {
-            ...order.toObject(), // Convert mongoose document to plain object
-            itemTotal, // Original package amount
+            ...order.toObject(),
+            itemTotal,
             deliveryFee: homeDeliveryFee ?? 0,
-            subtotal: totalAmount - (homeDeliveryFee ?? 0), // Total after discount but before delivery fee
-            grandTotal: totalAmount
+            subtotal: totalAmount - (homeDeliveryFee ?? 0),
+            grandTotal: totalAmount,
         };
 
         return sendResponse(
@@ -1159,10 +1230,51 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
             return ErrorHandler.badUserInput(res, "Unable to process payment at this time. Please try again.");
         }
 
-        const { totalAmount, homeDeliveryFee, tax, totalAmountCurrency, eventGroupId, eventId, guestFirstName, guestLastName, guestEmail, guestPhoneNumber,txnFee, shippingAddress, addressLatitude, addressLongitude, city, state, dispatchType, items, itemTotal } = order;
+        const {
+            totalAmount,
+            homeDeliveryFee,
+            tax,
+            totalAmountCurrency,
+            eventGroupId,
+            eventId,
+            guestFirstName,
+            guestLastName,
+            guestEmail,
+            guestPhoneNumber,
+            txnFee,
+            shippingAddress,
+            addressLatitude,
+            addressLongitude,
+            city,
+            state,
+            dispatchType,
+            items,
+            itemTotal,
+            paymentProcessingFeeEstimate,
+            serviceFeeAppliedToGuest,
+        } = order;
+
+        const estimatePaymentProcessingFee = (amount: number, currency: string): number => {
+            if (currency === "USD" || currency === "GBP") return amount * 0.0349 + 0.49;
+            if (currency === "NGN") {
+                const fee = amount * 0.015;
+                return amount > 2500 ? fee + 100 : fee;
+            }
+            return 0;
+        };
+
+        let patchTax = tax ?? 0;
+        let patchDiscount = order.discount ?? 0;
+        let patchTxnFee =
+            typeof txnFee === "number"
+                ? txnFee
+                : 0;
+        let patchProcessing =
+            typeof paymentProcessingFeeEstimate === "number"
+                ? paymentProcessingFeeEstimate
+                : estimatePaymentProcessingFee(itemTotal, totalAmountCurrency as string);
 
         let newTotalAmount = totalAmount;
-        // console.log("Initial Total Amount: ", newTotalAmount);
 
         // Handle Discount if discountCode is provided
         let discountAmount = 0;
@@ -1177,15 +1289,15 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
                 return ErrorHandler.badUserInput(res, "Invalid or inactive discount code.");
             }
 
-            // Check if the discount type is percentage or NGN or USD
-            if (discount.discountValueType !== "percentage" && discount.discountValueType !== totalAmountCurrency) {
-                return ErrorHandler.badUserInput(res, `Discount currency (${discount.discountValueType}) does not match order currency (${totalAmountCurrency}).`);
+            if (
+                discount.discountValueType !== "percentage" &&
+                discount.discountValueType !== totalAmountCurrency
+            ) {
+                return ErrorHandler.badUserInput(
+                    res,
+                    `Discount currency (${discount.discountValueType}) does not match order currency (${totalAmountCurrency}).`
+                );
             }
-
-            // // Check if discount value is more than total amount 
-            // if (discount.discountValue > newTotalAmount) {
-            //     return ErrorHandler.badUserInput(res, "Discount value cannot be more than the total amount.");
-            // }
 
             const checkDiscountUsageForEmail = await OrderService.getOrderByField({
                 guestEmail: guestEmail,
@@ -1196,8 +1308,7 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
                 return ErrorHandler.badUserInput(res, "You have already used this discount code for this event.");
             }
 
-            // Before applying the discount, deduct the tax and homeDeliveryFee so we apply the discount to the package not the total including the tax and home delivery fee
-            const totalPackageAmount =itemTotal;
+            const totalPackageAmount = itemTotal;
 
             if (discount.discountValueType === "percentage") {
                 discountAmount = (discount.discountValue / 100) * totalPackageAmount;
@@ -1205,34 +1316,33 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
                 discountAmount = discount.discountValue;
             }
 
-            // console.log("Discount Amount: ", discountAmount);
-
-            // console.log("Total Package Amount (before discount): ", totalPackageAmount);
-
-            // Apply the discount
             const amountAfterDiscount = Math.max(totalPackageAmount - discountAmount, 0);
-            // console.log("Amount After Discount: ", amountAfterDiscount);
-            // console.log("Discounted Amount: ", totalPackageAmount);
 
-            // Now we add the homeDeliveryFee back and then calculate tax for the remaining amount after discount
-            const newTax = Number((amountAfterDiscount * taxRate).toFixed(2)) ?? 0;
-            // console.log("New Tax after Discount: ", newTax);
+            patchTax = Number((amountAfterDiscount * taxRate).toFixed(2)) ?? 0;
 
-            // Update the new total amount
-            newTotalAmount = amountAfterDiscount + newTax + (homeDeliveryFee ?? 0) +(txnFee ?? 0);
+            const rateDoc = await ServiceFeeRateModel.findOne({
+                currency: totalAmountCurrency,
+            }).lean();
+            patchTxnFee = computePlatformTxnFee(amountAfterDiscount, rateDoc);
 
-            // Prevent negative total
+            patchProcessing = estimatePaymentProcessingFee(
+                amountAfterDiscount,
+                totalAmountCurrency as string
+            );
+
+            const guestBears = serviceFeeAppliedToGuest === true;
+            newTotalAmount =
+                amountAfterDiscount +
+                patchTax +
+                (homeDeliveryFee ?? 0) +
+                patchProcessing +
+                (guestBears ? patchTxnFee : 0);
+
             if (newTotalAmount < 0) newTotalAmount = 0;
 
-            // Increment usage count
             discount.totalUsed += 1;
-
-            // Update overallValue with this transaction's discount amount
             discount.overallValue += discountAmount;
-            order.tax = newTax; // Update the order's tax to reflect the new tax after discount
-            order.discount = discountAmount ?? 0; // Store the discount amount in the order for reference
-
-            await order.save()
+            patchDiscount = discountAmount ?? 0;
 
             await discount.save();
         }
@@ -1242,49 +1352,15 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
         let trackingId: string = "";
         let shipmentStatus: string = "";
 
-        // // capture shipment if home delivery is selected
-        // if (order?.deliveryType === "homeDelivery" && order?.items?.find((pkg: any) => pkg?.packageId?.packageDelivery === "homeDelivery:platformDelivery")) {
-        //     const shippingRequest = await buildShippingPayload(eventId, {
-        //         guestFirstName,
-        //         guestLastName,
-        //         guestPhoneNumber,
-        //         shippingAddress,
-        //         addressLatitude,
-        //         addressLongitude,
-        //         city,
-        //         state,
-        //         dispatchType,
-        //         items: items,
-        //     }, "capture");
-        //     const captureShipment = await GIGService.captureShipment(shippingRequest);
-
-        //     // const captureShipment = await captureShipmentGIG(eventId, {
-        //     //     guestFirstName,
-        //     //     guestLastName,
-        //     //     guestPhoneNumber,
-        //     //     shippingAddress,
-        //     //     addressLatitude,
-        //     //     addressLongitude,
-        //     //     city,
-        //     //     state,
-        //     //     dispatchType,
-        //     //     items: items,
-        //     // });
-        //     if (!captureShipment) return ErrorHandler.notFound(res, "Unable to capture shipment!");
-
-        //     // console.log("Capture Shipment: ", captureShipment);
-        //     trackingId = captureShipment?.captureData?.waybill || "";
-        //     shipmentStatus = captureShipment?.captureData?.message || "";
-
-        // }
-
-
         const updatedData = {
             totalAmount: grandTotalAmount,
             discountCode: discountCode || undefined,
             trackingId: trackingId || "",
-            // orderStatus: shipmentStatus === 'Shipment created successfully' ? "shipped" : "pending",
-        }
+            tax: patchTax,
+            discount: patchDiscount,
+            txnFee: patchTxnFee,
+            paymentProcessingFeeEstimate: patchProcessing,
+        };
 
         const updatedOrder = await OrderService.updateOrderById(orderId, updatedData, true);
         if (!updatedOrder) return ErrorHandler.badUserInput(res, "Unable to update the Order details");
@@ -1292,14 +1368,27 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
         let paymentLink: { paymentLink: string; reference: string } | undefined;
         let newPayment;
 
-        // Initiate payment
+        const payCurrency = (totalAmountCurrency as string).toUpperCase();
+
+        // Initiate payment — NGN Paystack; USD / GBP / others PayPal
         if (updatedData.totalAmount !== 0) {
            try {
-            paymentLink = totalAmountCurrency === "NGN" ?
-                await PaymentService.initiatePayment(guestEmail, updatedData.totalAmount, order._id.toString(), order.hostId.toString()) :
-                await PaymentService.initiatePaymentPaypal(guestEmail, updatedData.totalAmount, order._id.toString(), order.hostId.toString(),);
+            paymentLink =
+                payCurrency === "NGN"
+                    ? await PaymentService.initiatePayment(
+                          guestEmail,
+                          updatedData.totalAmount,
+                          order._id.toString(),
+                          order.hostId.toString()
+                      )
+                    : await PaymentService.initiatePaymentPaypal(
+                          guestEmail,
+                          updatedData.totalAmount,
+                          order._id.toString(),
+                          order.hostId.toString(),
+                          payCurrency
+                      );
             } catch (paymentError) {
-                // ✅ Revert payment status if payment initiation fails
                 await OrderService.updateOrderById(orderId, { paymentStatus: "pending" }, true);
                 throw paymentError;
             }
@@ -1356,7 +1445,11 @@ export const contGuestCheckout = async (req: Request, res: Response): Promise<Re
             time: formattedTime,
             date: formattedDate,
         });
-        const partnerMap = { "NGN": "Paystack", "USD": "Paypal" };
+        const partnerMap: Record<string, string> = {
+            NGN: "Paystack",
+            USD: "Paypal",
+            GBP: "Paypal",
+        };
         const formattedPaymentPartner = partnerMap[totalAmountCurrency] || "Unknown";
 
                 const orderResponse = {

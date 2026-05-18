@@ -655,19 +655,21 @@ export const handleChargeSuccess = async (
     const totalAmount = paymentRecord.amount;
     const actualAmount = paymentRecord.amount - (deliveryFee + tax + transactionFee);
 
-    let platformFee = 0;
-    let hostShare = 0;
     const currency = paymentRecord.currency;
 
-    // Get the fees needed for Platform and the Host
-    if (currency === "NGN") {
-      platformFee = actualAmount * 0.035;  // For NGN Transactions
-    } else if (currency === "USD") {
-      platformFee = actualAmount * 0.055;  // For USD Transactions
+    const checkoutSchema = (order as { checkoutFeeSchema?: number }).checkoutFeeSchema ?? 1;
+    let platformFee = 0;
+    if (checkoutSchema >= 2 && typeof order.txnFee === "number") {
+      platformFee = Number(order.txnFee);
+    } else {
+      if (currency === "NGN") {
+        platformFee = actualAmount * 0.035;
+      } else if (currency === "USD" || currency === "GBP") {
+        platformFee = actualAmount * 0.055;
+      }
     }
 
-    // platformFee = actualAmount * 0.02;
-    hostShare = actualAmount - platformFee;
+    const hostShare = actualAmount - platformFee;
 
     // Save to DB
     await FeeRecordModel.create({

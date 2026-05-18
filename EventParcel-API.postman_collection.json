@@ -2,7 +2,7 @@
   "info": {
     "name": "EventParcel API v2",
     "_postman_id": "eventparcel-api-v2-collection",
-    "description": "# EventParcel API v2\n\nComplete API reference for the EventParcel backend.\n\n## Base URL\nSet the `baseUrl` collection variable to your environment, e.g.:\n- **Local:** `http://localhost:5000/api/v1`\n- **Staging:** `https://staging.eventparcel.com/api/v1`\n- **Production:** `https://api.eventparcel.com/api/v1`\n\n## Authentication\nMost endpoints require a Bearer token. Set the `adminToken` or `userToken` collection variable after logging in.\n\n```\nAuthorization: Bearer <token>\n```\n\n## Response Format\nAll responses follow the structure:\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Human-readable message\",\n  \"data\": { ... }\n}\n```\n\n## Error Format\n```json\n{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Error description\"\n}\n```",
+    "description": "# EventParcel API v2\n\nComplete API reference for the EventParcel backend.\n\n## Base URL\nSet the `baseUrl` collection variable to your environment, e.g.:\n- **Local:** `http://localhost:5000/api/v1`\n- **Staging:** `https://staging.eventparcel.com/api/v1`\n- **Production:** `https://api.eventparcel.com/api/v1`\n\n## Authentication\nMost endpoints require a Bearer token. Set the `adminToken` or `userToken` collection variable after logging in.\n\n```\nAuthorization: Bearer <token>\n```\n\n## Response Format\nAll responses follow the structure:\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Human-readable message\",\n  \"data\": { ... }\n}\n```\n\n## Error Format\n```json\n{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Error description\"\n}\n```\n\n### Billing & Fulfillment\n**Service fee rates** (per NGN/USD/GBP) include optional platform-wide `allowHostToPassServiceFeeToGuest` (set via the same upsert body, mirrored across rows). Souvenir/custom bag admin CRUD and host fulfillment catalog reads are in the **Billing & Fulfillment** request folder.\n\n### Events & Packages (Host)\nEvent groups (**`serviceFeeAppliedToGuest`**), packages (fulfillment **`souvenirListingId`** / **`customBagListingId`**), and guest checkout (**`txnFee`**, **`paymentProcessingFeeEstimate`**, **`checkoutFeeSchema`**) are documented in the **Events & Packages (Host)** folder.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -40,6 +40,41 @@
       "key": "importId",
       "value": "",
       "description": "MongoDB ObjectId of a DeliveryFeeImport session document. Returned by the Import Preview endpoint."
+    },
+    {
+      "key": "serviceFeeCurrency",
+      "value": "NGN",
+      "description": "Path param for service fee upsert/delete: NGN, USD, or GBP."
+    },
+    {
+      "key": "souvenirListingId",
+      "value": "",
+      "description": "MongoDB ObjectId of a SouvenirListing (admin update / package body)."
+    },
+    {
+      "key": "customBagListingId",
+      "value": "",
+      "description": "MongoDB ObjectId of a CustomBagListing (admin update / package body)."
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "description": "Mongo `_id` of an Event."
+    },
+    {
+      "key": "eventGroupId",
+      "value": "",
+      "description": "Mongo `_id` of an EventGroup."
+    },
+    {
+      "key": "packageId",
+      "value": "",
+      "description": "Mongo `_id` of a Package."
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "description": "Mongo `_id` of an Order."
     }
   ],
   "item": [
@@ -64,14 +99,21 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Lagos\"\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
             "description": "Creates a new state.\n\n**Auth:** Admin Bearer token required.\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `name` | string | ✅ | State name (e.g. `\"Lagos\"`). Will be stored as-is; `normalizedName` is derived automatically. |\n\n**Behaviour:**\n- If a state with the same `normalizedName` already exists and is `inactive`, it is re-activated.\n- Returns `409 Conflict` if an active state with the same name already exists.\n\n**Success Response — 201:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 201,\n  \"message\": \"State created successfully.\",\n  \"data\": {\n    \"_id\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n    \"name\": \"Lagos\",\n    \"normalizedName\": \"lagos\",\n    \"status\": \"active\",\n    \"deliveryCovered\": false\n  }\n}\n```"
@@ -91,8 +133,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states"
+              ]
             },
             "description": "Returns all **active** states.\n\n**Auth:** Admin Bearer token required.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"States fetched successfully.\",\n  \"data\": {\n    \"states\": [\n      {\n        \"_id\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n        \"name\": \"Lagos\",\n        \"normalizedName\": \"lagos\",\n        \"status\": \"active\",\n        \"deliveryCovered\": true\n      }\n    ]\n  }\n}\n```"
           },
@@ -111,8 +158,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states/{{stateId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states", "{{stateId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states",
+                "{{stateId}}"
+              ]
             },
             "description": "Soft-deletes a state by setting its `status` to `\"inactive\"`.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `stateId` | MongoDB ObjectId of the state |\n\n**Note:** The state's cities are NOT automatically deactivated. Deactivate them individually if needed.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"State deleted successfully.\"\n}\n```"
           },
@@ -131,8 +184,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states/{{stateId}}/delivery-covered",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states", "{{stateId}}", "delivery-covered"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states",
+                "{{stateId}}",
+                "delivery-covered"
+              ]
             },
             "description": "Toggles the `deliveryCovered` boolean flag on a state. If it is currently `false` it becomes `true`, and vice versa.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `stateId` | MongoDB ObjectId of the state |\n\n**No request body required.**\n\n**Use Case:** The delivery fee computation will only apply to states where `deliveryCovered: true`. Disable a state's coverage to exclude it from the delivery fee system without deleting its data.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Delivery coverage enabled for Lagos.\",\n  \"data\": {\n    \"deliveryCovered\": true\n  }\n}\n```"
           },
@@ -145,8 +205,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/states/delivery-covered",
-              "host": ["{{baseUrl}}"],
-              "path": ["states", "delivery-covered"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "states",
+                "delivery-covered"
+              ]
             },
             "description": "**Public endpoint — no authentication required.**\n\nReturns all active states where `deliveryCovered` is `true`. Frontend should call this to populate state dropdowns shown to guests (e.g. when choosing a delivery address).\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Delivery-covered states fetched.\",\n  \"data\": {\n    \"states\": [\n      {\n        \"_id\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n        \"name\": \"Lagos\",\n        \"normalizedName\": \"lagos\"\n      }\n    ]\n  }\n}\n```"
           },
@@ -169,14 +234,23 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states/{{stateId}}/cities",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states", "{{stateId}}", "cities"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states",
+                "{{stateId}}",
+                "cities"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Ikeja\"\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
             "description": "Creates a new city under the specified state.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `stateId` | MongoDB ObjectId of the parent state |\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `name` | string | ✅ | City name (e.g. `\"Ikeja\"`) |\n\n**Behaviour:**\n- If a city with the same `normalizedName` under the same state already exists but is `inactive`, it is re-activated.\n- Returns `409 Conflict` if an active city with the same name already exists in this state.\n\n**Note:** Create a city named `\"Others\"` in each state as a catch-all for the delivery fee fallback logic.\n\n**Success Response — 201:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 201,\n  \"message\": \"City created successfully.\",\n  \"data\": {\n    \"_id\": \"664f1a2b3c4d5e6f7a8b9c1a\",\n    \"name\": \"Ikeja\",\n    \"normalizedName\": \"ikeja\",\n    \"stateId\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n    \"status\": \"active\"\n  }\n}\n```"
@@ -196,8 +270,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states/{{stateId}}/cities",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states", "{{stateId}}", "cities"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states",
+                "{{stateId}}",
+                "cities"
+              ]
             },
             "description": "Returns all **active** cities belonging to the specified state.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `stateId` | MongoDB ObjectId of the parent state |\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Cities fetched successfully.\",\n  \"data\": {\n    \"cities\": [\n      {\n        \"_id\": \"664f1a2b3c4d5e6f7a8b9c1a\",\n        \"name\": \"Ikeja\",\n        \"normalizedName\": \"ikeja\",\n        \"stateId\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n        \"status\": \"active\"\n      }\n    ]\n  }\n}\n```"
           },
@@ -216,8 +297,16 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/states/{{stateId}}/cities/{{cityId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "states", "{{stateId}}", "cities", "{{cityId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "states",
+                "{{stateId}}",
+                "cities",
+                "{{cityId}}"
+              ]
             },
             "description": "Soft-deletes a city by setting its `status` to `\"inactive\"`.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `stateId` | MongoDB ObjectId of the parent state |\n| `cityId` | MongoDB ObjectId of the city |\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"City deleted successfully.\"\n}\n```"
           },
@@ -242,8 +331,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees/template",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees", "template"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees",
+                "template"
+              ]
             },
             "description": "Downloads a pre-formatted Excel (`.xlsx`) template for bulk delivery fee import.\n\n**Auth:** Admin Bearer token required.\n\n**Response:** Binary `.xlsx` file download.\n\n**Template Columns:**\n| Column | Description |\n|--------|-------------|\n| Pickup State | Name of the pickup state (must match an existing active state) |\n| Pickup City | Name of the pickup city (must match an active city under Pickup State) |\n| Destination State | Name of the destination state |\n| Destination City | Name of the destination city |\n| Fee (₦) | Delivery fee amount in Naira (number) |\n\n> The template includes dropdown validation for state/city columns populated from the active states and cities in your database."
           },
@@ -262,8 +357,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees/import",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees", "import"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees",
+                "import"
+              ]
             },
             "body": {
               "mode": "formdata",
@@ -296,14 +397,24 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees/import/{{importId}}/confirm",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees", "import", "{{importId}}", "confirm"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees",
+                "import",
+                "{{importId}}",
+                "confirm"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"mode\": \"merge\"\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
             "description": "Commits a previously uploaded import session to the database.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `importId` | The `importId` returned by the Import Preview endpoint |\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `mode` | string | ✅ | Import strategy. See below. |\n\n**Import Modes:**\n| Mode | Behaviour |\n|------|-----------|\n| `merge` | Only inserts `new` and re-activates `inactive_match` rows. Skips existing duplicates. |\n| `replace_all` | Deactivates ALL existing active delivery fees first, then inserts everything from the file as fresh records. |\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Import confirmed. 9 records processed.\",\n  \"data\": {\n    \"processed\": 9\n  }\n}\n```"
@@ -323,8 +434,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees"
+              ]
             },
             "description": "Returns all **active** delivery fee records with populated state and city names.\n\n**Auth:** Admin Bearer token required.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Delivery fees fetched.\",\n  \"data\": {\n    \"deliveryFees\": [\n      {\n        \"_id\": \"664f...\",\n        \"pickupState\": { \"_id\": \"664f...0d\", \"name\": \"Lagos\" },\n        \"pickupCity\": { \"_id\": \"664f...1a\", \"name\": \"Ikeja\" },\n        \"destinationState\": { \"_id\": \"664f...2b\", \"name\": \"Abuja\" },\n        \"destinationCity\": { \"_id\": \"664f...3c\", \"name\": \"Garki\" },\n        \"fee\": 3500,\n        \"status\": \"active\"\n      }\n    ]\n  }\n}\n```"
           },
@@ -347,14 +463,21 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"pickupStateId\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n  \"pickupCityId\": \"664f1a2b3c4d5e6f7a8b9c1a\",\n  \"destinationStateId\": \"664f1a2b3c4d5e6f7a8b9c2b\",\n  \"destinationCityId\": \"664f1a2b3c4d5e6f7a8b9c3c\",\n  \"fee\": 3500\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
             "description": "Creates a single delivery fee entry manually.\n\n**Auth:** Admin Bearer token required.\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `pickupStateId` | ObjectId | ✅ | MongoDB ID of the pickup state |\n| `pickupCityId` | ObjectId | ✅ | MongoDB ID of the pickup city |\n| `destinationStateId` | ObjectId | ✅ | MongoDB ID of the destination state |\n| `destinationCityId` | ObjectId | ✅ | MongoDB ID of the destination city |\n| `fee` | number | ✅ | Fee amount in Naira |\n\n**Behaviour:**\n- Returns `409 Conflict` if an active fee for this exact combination already exists.\n- If an `inactive` record for the same combination exists, it is re-activated with the new fee.\n\n**Success Response — 201:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 201,\n  \"message\": \"Delivery fee created.\",\n  \"data\": { ... }\n}\n```"
@@ -378,14 +501,22 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees/{{deliveryFeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees", "{{deliveryFeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees",
+                "{{deliveryFeeId}}"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fee\": 4000,\n  \"destinationCityId\": \"664f1a2b3c4d5e6f7a8b9c3c\"\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
             "description": "Updates an existing delivery fee record.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `deliveryFeeId` | MongoDB ObjectId of the delivery fee record |\n\n**Body Fields (all optional):**\n| Field | Type | Description |\n|-------|------|-------------|\n| `pickupStateId` | ObjectId | New pickup state ID |\n| `pickupCityId` | ObjectId | New pickup city ID |\n| `destinationStateId` | ObjectId | New destination state ID |\n| `destinationCityId` | ObjectId | New destination city ID |\n| `fee` | number | Updated fee in Naira |\n\n**Note:** If the updated combination clashes with an existing active fee record, a `409 Conflict` is returned.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Delivery fee updated.\",\n  \"data\": { ... }\n}\n```"
@@ -405,8 +536,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fees/{{deliveryFeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fees", "{{deliveryFeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fees",
+                "{{deliveryFeeId}}"
+              ]
             },
             "description": "Soft-deletes a delivery fee record by setting its `status` to `\"inactive\"`.\n\n**Auth:** Admin Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `deliveryFeeId` | MongoDB ObjectId of the delivery fee record |\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Delivery fee deleted.\"\n}\n```"
           },
@@ -416,7 +553,7 @@
     },
     {
       "name": "Payment & Delivery (Host)",
-      "description": "Endpoints for hosts to create and manage payment & delivery configuration for their events.\n\nThese endpoints record:\n- Payout account details (Naira / Dollar)\n- Payment deadline date/time\n- Pickup location (address + lat/lng)\n- **Pickup State & City** (now stored as MongoDB ObjectIds referencing the `State` and `City` collections)\n- Delivery deadline date/time\n\n### State & City IDs\nWhen providing `state` and `city` in the request body, you must pass **MongoDB ObjectIds** from the State and City collections — **not plain text strings**.\n\nTo get valid IDs:\n1. Call `GET /api/v1/states/delivery-covered` for delivery-covered states\n2. Call `GET /api/v1/admin/states/:stateId/cities` for cities under a state",
+      "description": "Endpoints for hosts to create and manage payment & delivery configuration for their events.\n\nThese endpoints record:\n- Payout account details (Naira / Dollar)\n- Payment deadline date/time\n- Pickup location (address + lat/lng)\n- **Pickup State & City** (now stored as MongoDB ObjectIds referencing the `State` and `City` collections)\n- Delivery deadline date/time\n\n### State & City IDs\nWhen providing `state` and `city` in the request body, you must pass **MongoDB ObjectIds** from the State and City collections — **not plain text strings**.\n\nTo get valid IDs:\n1. Call `GET /api/v1/states/delivery-covered` for delivery-covered states\n2. Call `GET /api/v1/admin/states/:stateId/cities` for cities under a state\n\n### Frontend: payouts & PSP\nEnsure **`dollarAccount`** is complete when the event sells in **USD, CAD, or GBP** (Hyperwallet onboarding). Guests pay via **Paystack (NGN)** or **PayPal (USD / GBP totals)** depending on checkout — see **Events & Packages (Host)** for order fields (**`txnFee`**, **`paymentProcessingFeeEstimate`**, **`checkoutFeeSchema`**). Set collection variable **`eventId`** for `PATCH .../payment-delivery/event/{{eventId}}`.\n\n",
       "item": [
         {
           "name": "Create Payment & Delivery Record",
@@ -435,17 +572,23 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/payment-delivery",
-              "host": ["{{baseUrl}}"],
-              "path": ["payment-delivery"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment-delivery"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event\": \"664f1a2b3c4d5e6f7a8b9c0a\",\n  \"paymentDate\": \"2026-05-01\",\n  \"paymentTime\": \"18:00\",\n  \"paymentTimeZone\": \"Africa/Lagos\",\n  \"contactName\": \"John Doe\",\n  \"contactPhoneNumber\": \"08012345678\",\n  \"pickupLocation\": \"12 Adeola Odeku Street, Victoria Island\",\n  \"pickupLatitude\": \"6.4281\",\n  \"pickupLongitude\": \"3.4219\",\n  \"state\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n  \"city\": \"664f1a2b3c4d5e6f7a8b9c1a\",\n  \"deliveryDate\": \"2026-05-10\",\n  \"deliveryTime\": \"12:00\",\n  \"deliveryTimeZone\": \"Africa/Lagos\",\n  \"isDraft\": false,\n  \"nairaAccount\": {\n    \"accountNumber\": \"0123456789\",\n    \"bankName\": \"Access Bank\",\n    \"accountName\": \"John Doe\",\n    \"bankCode\": \"044\"\n  }\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
-            "description": "Creates a new Payment & Delivery configuration for an event.\n\n**Auth:** Host Bearer token required.\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `event` | ObjectId | ✅ | MongoDB ID of the event |\n| `paymentDate` | string | ✅ | Payment deadline date (`YYYY-MM-DD`) |\n| `paymentTime` | string | ✅ | Payment deadline time (`HH:mm`) |\n| `paymentTimeZone` | string | ✅ | IANA timezone string (e.g. `\"Africa/Lagos\"`) |\n| `contactName` | string | ✅ | Pickup contact person name |\n| `contactPhoneNumber` | string | ✅ | Pickup contact phone number (Nigerian format accepted) |\n| `pickupLocation` | string | ✅ | Human-readable pickup address |\n| `pickupLatitude` | string | ⬜ | Latitude of pickup location |\n| `pickupLongitude` | string | ⬜ | Longitude of pickup location |\n| `state` | ObjectId | ✅* | MongoDB ObjectId of the pickup state (*required if event has `isPickUp` or `isPlatformDelivery`) |\n| `city` | ObjectId | ✅* | MongoDB ObjectId of the pickup city (*required if event has `isPickUp` or `isPlatformDelivery`) |\n| `deliveryDate` | string | ✅ | Delivery deadline date (`YYYY-MM-DD`) |\n| `deliveryTime` | string | ✅ | Delivery deadline time (`HH:mm`) |\n| `deliveryTimeZone` | string | ✅ | IANA timezone string |\n| `isDraft` | boolean | ⬜ | Set `true` to save as draft without publishing |\n| `nairaAccount` | object | ✅* | Required if event has `isNairaAccount: true` |\n| `dollarAccount` | object | ✅* | Required if event has `isDollarAccount: true` |\n\n**`nairaAccount` object:**\n```json\n{\n  \"accountNumber\": \"0123456789\",\n  \"bankName\": \"Access Bank\",\n  \"accountName\": \"John Doe\",\n  \"bankCode\": \"044\"\n}\n```\n\n**`dollarAccount` object:**\n```json\n{\n  \"usAccountNumber\": \"000123456789\",\n  \"routingNumber\": \"021000021\",\n  \"usBankName\": \"Chase Bank\",\n  \"usAccountName\": \"John Doe\"\n}\n```\n\n**Validation Rules:**\n- `paymentDate` must be in the future and before the event date\n- `deliveryDate` must be in the future and before the event date\n- `state` and `city` must be valid MongoDB ObjectIds when provided\n- Bank account details are validated against Paystack before saving\n\n**Success Response — 201:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 201,\n  \"message\": \"Payment and Delivery record created successfully!\",\n  \"data\": { ... }\n}\n```"
+            "description": "Creates a new Payment & Delivery configuration for an event.\n\n**Auth:** Host Bearer token required.\n\n**Body Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `event` | ObjectId | ✅ | MongoDB ID of the event |\n| `paymentDate` | string | ✅ | Payment deadline date (`YYYY-MM-DD`) |\n| `paymentTime` | string | ✅ | Payment deadline time (`HH:mm`) |\n| `paymentTimeZone` | string | ✅ | IANA timezone string (e.g. `\"Africa/Lagos\"`) |\n| `contactName` | string | ✅ | Pickup contact person name |\n| `contactPhoneNumber` | string | ✅ | Pickup contact phone number (Nigerian format accepted) |\n| `pickupLocation` | string | ✅ | Human-readable pickup address |\n| `pickupLatitude` | string | ⬜ | Latitude of pickup location |\n| `pickupLongitude` | string | ⬜ | Longitude of pickup location |\n| `state` | ObjectId | ✅* | MongoDB ObjectId of the pickup state (*required if event has `isPickUp` or `isPlatformDelivery`) |\n| `city` | ObjectId | ✅* | MongoDB ObjectId of the pickup city (*required if event has `isPickUp` or `isPlatformDelivery`) |\n| `deliveryDate` | string | ✅ | Delivery deadline date (`YYYY-MM-DD`) |\n| `deliveryTime` | string | ✅ | Delivery deadline time (`HH:mm`) |\n| `deliveryTimeZone` | string | ✅ | IANA timezone string |\n| `isDraft` | boolean | ⬜ | Set `true` to save as draft without publishing |\n| `nairaAccount` | object | ✅* | Required if event has `isNairaAccount: true` |\n| `dollarAccount` | object | ✅* | Required if event has `isDollarAccount: true` |\n\n**`nairaAccount` object:**\n```json\n{\n  \"accountNumber\": \"0123456789\",\n  \"bankName\": \"Access Bank\",\n  \"accountName\": \"John Doe\",\n  \"bankCode\": \"044\"\n}\n```\n\n**`dollarAccount` object:**\n```json\n{\n  \"usAccountNumber\": \"000123456789\",\n  \"routingNumber\": \"021000021\",\n  \"usBankName\": \"Chase Bank\",\n  \"usAccountName\": \"John Doe\"\n}\n```\n\n**Validation Rules:**\n- `paymentDate` must be in the future and before the event date\n- `deliveryDate` must be in the future and before the event date\n- `state` and `city` must be valid MongoDB ObjectIds when provided\n- Bank account details are validated against Paystack before saving\n\n**Success Response — 201:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 201,\n  \"message\": \"Payment and Delivery record created successfully!\",\n  \"data\": { ... }\n}\n```\n\n**Frontend:** When the associated event exposes **USD/CAD/GBP** catalogue flags, validate **`dollarAccount`** before submission; Naira-only events emphasize **`nairaAccount`** validation."
           },
           "response": []
         },
@@ -466,17 +609,728 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/payment-delivery/event/{{eventId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["payment-delivery", "event", "{{eventId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment-delivery",
+                "event",
+                "{{eventId}}"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"state\": \"664f1a2b3c4d5e6f7a8b9c0d\",\n  \"city\": \"664f1a2b3c4d5e6f7a8b9c1a\",\n  \"fee\": 3500\n}",
               "options": {
-                "raw": { "language": "json" }
+                "raw": {
+                  "language": "json"
+                }
               }
             },
-            "description": "Updates an existing Payment & Delivery record for an event. If no record exists, one is created.\n\n**Auth:** Host Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `eventId` | MongoDB ObjectId of the event |\n\n**Body Fields (all optional — only send fields to update):**\n| Field | Type | Description |\n|-------|------|-------------|\n| `state` | ObjectId | Updated pickup state ID |\n| `city` | ObjectId | Updated pickup city ID |\n| `paymentDate` | string | Updated payment deadline date |\n| `paymentTime` | string | Updated payment deadline time |\n| `deliveryDate` | string | Updated delivery date |\n| `deliveryTime` | string | Updated delivery time |\n| `contactName` | string | Updated contact name |\n| `contactPhoneNumber` | string | Updated contact phone |\n| `pickupLocation` | string | Updated pickup address |\n| `nairaAccount` | object | Updated Naira payout details |\n| `dollarAccount` | object | Updated Dollar payout details |\n\n**Note:** `state` and `city` must be valid MongoDB ObjectIds.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Payment and Delivery record updated successfully!\",\n  \"data\": { ... }\n}\n```"
+            "description": "Updates an existing Payment & Delivery record for an event. If no record exists, one is created.\n\n**Auth:** Host Bearer token required.\n\n**Path Params:**\n| Param | Description |\n|-------|-------------|\n| `eventId` | MongoDB ObjectId of the event |\n\n**Body Fields (all optional — only send fields to update):**\n| Field | Type | Description |\n|-------|------|-------------|\n| `state` | ObjectId | Updated pickup state ID |\n| `city` | ObjectId | Updated pickup city ID |\n| `paymentDate` | string | Updated payment deadline date |\n| `paymentTime` | string | Updated payment deadline time |\n| `deliveryDate` | string | Updated delivery date |\n| `deliveryTime` | string | Updated delivery time |\n| `contactName` | string | Updated contact name |\n| `contactPhoneNumber` | string | Updated contact phone |\n| `pickupLocation` | string | Updated pickup address |\n| `nairaAccount` | object | Updated Naira payout details |\n| `dollarAccount` | object | Updated Dollar payout details |\n\n**Note:** `state` and `city` must be valid MongoDB ObjectIds.\n\n**Success Response — 200:**\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Payment and Delivery record updated successfully!\",\n  \"data\": { ... }\n}\n```\n\n**Frontend:** `PATCH` merges payout + deadline fields — keep **ObjectIds** for state/city. When adding **USD/CAD/GBP** groups downstream, **`dollarAccount`** must remain valid (see folder overview)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Events & Packages (Host)",
+      "description": "Host/cohost flows for groups and packages (`optionalAuthenticate` on routes — send **Bearer {{userToken}}** when acting as an authenticated host/cohost).\n\n### Frontend — billing-aware fields\n\n**Event group** (`POST {{baseUrl}}/add-group`, `PUT .../update-group/:eventGroupId`)\n\n| Field | Notes |\n|-------|-------|\n| `groupCurrency` | `NGN` \\| `USD` \\| `CAD` \\| `GBP`. |\n| `serviceFeeAppliedToGuest` | Optional boolean. Allowed only when platform `allowHostToPassServiceFeeToGuest` is **true** (see **`GET /admin/service-fee-rates`**). |\n\n**Packages** (`POST .../add-package`, `PUT .../update-package/:packageId`) use **`multipart/form-data`** (images + text fields).\n\n| Field | Notes |\n|-------|-------|\n| `packagePriceCurrency` | Must match validator; server's group currency anchors checkout. |\n| `packageDelivery` | Comma-separated: `pickUp`, `platformDelivery`, `selfManaged`. Platform delivery is rejected for USD/GBP groups. |\n| `souvenirListingId` | Optional Mongo ID — listing **currency** must match group's; list sources: **`GET /fulfillment-catalog/souvenirs`** (cohost). |\n| `customBagListingId` | Optional Mongo ID — same rules; **`GET /fulfillment-catalog/custom-bags`**. |\n| `PUT` | Partial text fields; **`souvenirListingId`** / **`customBagListingId`** sent as **`\"\"`** clear the link; pair **`publicIdsToReplace`** when replacing images.\n\n**Guest checkout**\n\n| Route | Purpose |\n|-------|--------|\n| **`POST .../guest-checkout/:eventId/:eventGroupId`** | JSON body creates pending order & payment intent. |\n| **`POST .../checkout-contd/:orderId`** | Continue after totals/discount recomputation; optional `discountCode`. |\n\n- Checkout anchor currencies supported on this endpoint: **NGN, USD, GBP** (other group currencies hit validation).\n- **Paystack**: NGN. **PayPal**: USD & GBP (`totalAmountCurrency`).\n- Responses include **`checkoutFeeSchema`** (v2): **`txnFee`** = platform service fee; **`paymentProcessingFeeEstimate`** = PSP-side estimate; line items may include **`fulfillmentSouvenir`** / **`fulfillmentCustomBag`** snapshots.\n\n**`GET .../clone-group/:eventGroupId`** copies packages including souvenir/bag refs when present.\n\nSee also **Billing & Fulfillment** and **Payment & Delivery (Host)**.",
+      "item": [
+        {
+          "name": "Create Event Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "description": "Host/cohost when required by your tenancy"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/add-group",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "add-group"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"664f1a2b3c4d5e6f7a8b9c0a\",\n  \"groupName\": \"VIP Reception\",\n  \"groupDescription\": \"Optional description\",\n  \"groupCurrency\": \"NGN\",\n  \"groupPrivacy\": \"private\",\n  \"isDraft\": false,\n  \"serviceFeeAppliedToGuest\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Creates an event group under `eventId`.\n\n**Frontend:** Prefer setting **`serviceFeeAppliedToGuest`** explicitly. If `true`, backend checks platform **`allowHostToPassServiceFeeToGuest`** on service fee rate rows (**`GET /admin/service-fee-rates`**). **GBP groups** behave like FX groups for delivery rules (platform delivery forbidden). See folder overview for **`groupCurrency`** options."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event Group",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/update-group/{{eventGroupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "update-group",
+                "{{eventGroupId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupName\": \"VIP Reception (updated)\",\n  \"groupCurrency\": \"GBP\",\n  \"serviceFeeAppliedToGuest\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Partial updates. Turning **`serviceFeeAppliedToGuest`** from `false` → `true` re-validates platform **`allowHostToPassServiceFeeToGuest`** (from service fee rates). Changing **`groupCurrency`** may affect payouts and guest PSP (NGN Paystack vs USD/GBP PayPal)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/add-package",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "add-package"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "eventId",
+                  "type": "text",
+                  "value": "{{eventId}}",
+                  "description": "Parent event Mongo ID"
+                },
+                {
+                  "key": "groupId",
+                  "type": "text",
+                  "value": "{{eventGroupId}}"
+                },
+                {
+                  "key": "packageTitle",
+                  "type": "text",
+                  "value": "Premium Box"
+                },
+                {
+                  "key": "packageDescription",
+                  "type": "text",
+                  "value": "Optional description"
+                },
+                {
+                  "key": "packagePriceCurrency",
+                  "type": "text",
+                  "value": "NGN",
+                  "description": "Must align with group's currency."
+                },
+                {
+                  "key": "packagePrice",
+                  "type": "text",
+                  "value": "15000"
+                },
+                {
+                  "key": "packageQuantity",
+                  "type": "text",
+                  "value": "100"
+                },
+                {
+                  "key": "packageDelivery",
+                  "type": "text",
+                  "value": "pickUp,selfManaged",
+                  "description": "Comma-separated: pickUp | platformDelivery | selfManaged."
+                },
+                {
+                  "key": "packageSize",
+                  "type": "text",
+                  "value": "mediumBox"
+                },
+                {
+                  "key": "isDraft",
+                  "type": "text",
+                  "value": "false"
+                },
+                {
+                  "key": "souvenirListingId",
+                  "type": "text",
+                  "value": "{{souvenirListingId}}",
+                  "description": "Optional; omit or paste ID from fulfillment catalog."
+                },
+                {
+                  "key": "customBagListingId",
+                  "type": "text",
+                  "value": "{{customBagListingId}}",
+                  "description": "Optional; listing currency must match group."
+                },
+                {
+                  "key": "packageImgUrls",
+                  "description": "1–4 images (JPEG/PNG). Repeat this key per file.",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "description": "**`multipart/form-data`** — multer field **`packageImgUrls`** (multiple files).\n\n**Frontend:** hydrate **`souvenirListingId` / `customBagListingId`** from **`GET /fulfillment-catalog/souvenirs`** and **`GET /fulfillment-catalog/custom-bags`**. Listing **`currency`** must match the group's **`groupCurrency`**. Persisted **`fulfillmentSouvenir`** and **`fulfillmentCustomBag`** snapshots attach to guest order lines when refs exist."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Package",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/update-package/{{packageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "update-package",
+                "{{packageId}}"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "packageTitle",
+                  "type": "text",
+                  "value": "",
+                  "description": "Partial update — omit or fill."
+                },
+                {
+                  "key": "packagePrice",
+                  "type": "text",
+                  "value": ""
+                },
+                {
+                  "key": "packageDelivery",
+                  "type": "text",
+                  "value": ""
+                },
+                {
+                  "key": "publicIdsToReplace",
+                  "type": "text",
+                  "value": "",
+                  "description": "When uploading replacement images (paired with multer uploads)."
+                },
+                {
+                  "key": "souvenirListingId",
+                  "type": "text",
+                  "value": "",
+                  "description": "Empty string \"\" clears souvenir ref."
+                },
+                {
+                  "key": "customBagListingId",
+                  "type": "text",
+                  "value": "",
+                  "description": "Empty string \"\" clears bag ref."
+                },
+                {
+                  "key": "packageImgUrls",
+                  "type": "file",
+                  "description": "Optional replacement images.",
+                  "src": ""
+                }
+              ]
+            },
+            "description": "Send only fields to change (+ optional **`packageImgUrls`**). Use **`publicIdsToReplace`** (see API convention) alongside new files to swap Cloudinary IDs. Clear **`souvenirListingId` / `customBagListingId`** with empty string when unlinking catalogs."
+          },
+          "response": []
+        },
+        {
+          "name": "Clone Event Group",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clone-group/{{eventGroupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clone-group",
+                "{{eventGroupId}}"
+              ]
+            },
+            "description": "Clones the group (new IDs) and duplicates packages — **listing refs** copied when present (subject to validators on read paths)."
+          },
+          "response": []
+        },
+        {
+          "name": "Guest Checkout (create order)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/guest-checkout/{{eventId}}/{{eventGroupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "guest-checkout",
+                "{{eventId}}",
+                "{{eventGroupId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guestFirstName\": \"Ada\",\n  \"guestLastName\": \"Lovelace\",\n  \"guestEmail\": \"ada@example.com\",\n  \"guestPhoneNumber\": \"+2348012345678\",\n  \"deliveryType\": \"pickUp\",\n  \"items\": [\n    {\n      \"packageId\": \"{{packageId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"discountCode\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Public guest flow (typically unauthenticated).\n\n**Frontend display:** Read **`checkoutFeeSchema`**, **`txnFee`** (platform service fee when guest-bearing rules apply), **`paymentProcessingFeeEstimate`**, **`totalAmount`** / **`totalAmountCurrency`** (NGN → Paystack authorization; USD/GBP → PayPal). **`items[].fulfillmentSouvenir`** / **`fulfillmentCustomBag`** carry listing snapshots.\n\nProvide shipping + **`state`** / **`city`** when **`deliveryType`** is **`homeDelivery`** (**NGN** groups only — platform-covered delivery rejects USD/GBP anchors)."
+          },
+          "response": []
+        },
+        {
+          "name": "Guest Checkout Continue (pay)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/checkout-contd/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "checkout-contd",
+                "{{orderId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discountCode\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Continues payment after order exists; **`paymentStatus`** may move to **`processing`**.\n\nSame PSP routing as step one (Paystack vs PayPal).\n\nUse **`{{orderId}}`** as Mongo **_id** of the order unless your clients use **`orderId`** string — verify your stored id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Billing & Fulfillment",
+      "description": "Group/package fields that affect fees, fulfillment, and guest checkout are documented in **Events & Packages (Host)**.\n\nAdmin: per-currency platform **service fee rates** (`ratePercent`, optional `minimumCap` / `maximumCap`, optional platform-wide `allowHostToPassServiceFeeToGuest` — mirrored on all currency rows), plus CRUD for **souvenir** and **custom bag** fulfillment listings.\n\nHost/cohost: read-only **active** catalogs used when creating packages — optional body fields `souvenirListingId` and `customBagListingId` on package create/update (must match the event group's currency).\n\n**Related checkout fields (orders):** `checkoutFeeSchema` (v2+), `txnFee` = platform service fee, `paymentProcessingFeeEstimate` for PSP-side estimate, `serviceFeeAppliedToGuest` on the group.\n\n**Auth:** Admin routes → `adminToken`. Catalog GETs → `userToken`; routes require **cohost** role.",
+      "item": [
+        {
+          "name": "List Service Fee Rates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/service-fee-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "service-fee-rates"
+              ]
+            },
+            "description": "Returns configured rows sorted by currency (`ratePercent`, caps, mirrored `allowHostToPassServiceFeeToGuest`)."
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Service Fee Rate",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/service-fee-rates/{{serviceFeeCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "service-fee-rates",
+                "{{serviceFeeCurrency}}"
+              ]
+            },
+            "description": "**Path:** `currency` ∈ NGN, USD, GBP.\n\n**Body:** `ratePercent` (number 0–100). Optionally `minimumCap`, `maximumCap` (numbers; omit or `null` for that bound).\nOptionally **`allowHostToPassServiceFeeToGuest`** (boolean): when sent, applies to **all** currency rows and replaces the deprecated PlatformSettings singleton. Omit to leave the flag unchanged (legacy PlatformSettings doc is migrated once rows exist).\n\n**Tip:** Call `GET /admin/service-fee-rates` to read the mirrored flag from any row.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ratePercent\": 3.5,\n  \"minimumCap\": 100,\n  \"maximumCap\": 50000,\n  \"allowHostToPassServiceFeeToGuest\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Service Fee Rate",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/service-fee-rates/{{serviceFeeCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "service-fee-rates",
+                "{{serviceFeeCurrency}}"
+              ]
+            },
+            "description": "Deletes the row for `currency`; missing row may revert checkout to capped 3.5% fallback behaviour."
+          },
+          "response": []
+        },
+        {
+          "name": "List Souvenir Listings (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/souvenir-listings?activeOnly=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "souvenir-listings"
+              ],
+              "query": [
+                {
+                  "key": "activeOnly",
+                  "value": "",
+                  "description": "true = only active"
+                }
+              ]
+            },
+            "description": "Optional query `activeOnly=true` for active listings only."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Souvenir Listing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/souvenir-listings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "souvenir-listings"
+              ]
+            },
+            "description": "**Body:** `tierName`, `price` (number), `currency` (NGN|USD|GBP), optional `description`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tierName\": \"Gold\",\n  \"price\": 2500,\n  \"currency\": \"NGN\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Souvenir Listing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/souvenir-listings/{{souvenirListingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "souvenir-listings",
+                "{{souvenirListingId}}"
+              ]
+            },
+            "description": "Partial update: any of `tierName`, `price`, `currency`, `description`, `isActive`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true,\n  \"price\": 3000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Custom Bag Listings (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/custom-bag-listings?activeOnly=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "custom-bag-listings"
+              ],
+              "query": [
+                {
+                  "key": "activeOnly",
+                  "value": "",
+                  "description": "true = only active"
+                }
+              ]
+            },
+            "description": "Optional query `activeOnly=true`."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Custom Bag Listing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/custom-bag-listings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "custom-bag-listings"
+              ]
+            },
+            "description": "**Body:** `tierName`, `price`, `currency` (NGN|USD|GBP), optional `description`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tierName\": \"Premium bag\",\n  \"price\": 1500,\n  \"currency\": \"NGN\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Custom Bag Listing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "description": "Admin JWT required"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/custom-bag-listings/{{customBagListingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "custom-bag-listings",
+                "{{customBagListingId}}"
+              ]
+            },
+            "description": "Partial update: any of `tierName`, `price`, `currency`, `description`, `isActive`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Souvenirs (Fulfillment catalog)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "description": "JWT for user with cohost role (per route)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fulfillment-catalog/souvenirs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fulfillment-catalog",
+                "souvenirs"
+              ]
+            },
+            "description": "Active listings for package linking. **Requires cohost** (see `authorizeRole`)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Custom Bags (Fulfillment catalog)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "description": "JWT for user with cohost role (per route)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fulfillment-catalog/custom-bags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fulfillment-catalog",
+                "custom-bags"
+              ]
+            },
+            "description": "Active listings for package linking. **Requires cohost**."
           },
           "response": []
         }
@@ -499,8 +1353,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin/delivery-fee-audit-logs?resource=&action=&from=&to=&page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "delivery-fee-audit-logs"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-fee-audit-logs"
+              ],
               "query": [
                 {
                   "key": "resource",

@@ -141,6 +141,15 @@ export interface IEvent extends Document {
 }
 
 
+export interface IFulfillmentListingSnapshot {
+  listingId: Types.ObjectId;
+  tierName: string;
+  price: number;
+  currency: string;
+  description?: string;
+}
+
+
 export interface IEventGroup extends Document {
   _id: Types.ObjectId;
   group: Types.ObjectId;
@@ -154,6 +163,8 @@ export interface IEventGroup extends Document {
   link: string;
   contacts: IGuestTracking[];
   isDraft?: boolean;
+  /** When true, guest checkout adds platform service fee (txnFee) to payable total */
+  serviceFeeAppliedToGuest?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -173,6 +184,8 @@ export interface IPackage extends Document {
   packageSize?: number;
   packageStatus?: "draft" | "active" | "archived" | "deleted";
   isDraft?: boolean;
+  souvenirListing?: Types.ObjectId;
+  customBagListing?: Types.ObjectId;
 }
 
 export interface IGuestContact extends Document {
@@ -255,7 +268,7 @@ export interface IOrder extends Document {
   discountCode: string;
   itemTotal: number;
   totalAmount: number;
-  totalAmountCurrency: "USD" | "NGN";
+  totalAmountCurrency: "USD" | "NGN" | "GBP";
   shippingAddress: string;
   addressLatitude?: string;
   addressLongitude?: string;
@@ -265,7 +278,14 @@ export interface IOrder extends Document {
   deliveryType: string;
   homeDeliveryFee: number | undefined;
   discount: number | undefined;
+  /** Platform service fee (computed at checkout); webhook maps this to payment.platformFee when checkoutFeeSchema >= 2 */
   txnFee: number | undefined;
+  /** Estimated PSP processing fee folded into guest payable total (formerly conflated with txnFee) */
+  paymentProcessingFeeEstimate?: number | undefined;
+  /** Snapshot from EventGroup at checkout */
+  serviceFeeAppliedToGuest?: boolean;
+  /** 1 = legacy webhook fee formula; 2 = txnFee holds platform service fee */
+  checkoutFeeSchema?: number;
   tax: number;
   trackingId?: string | undefined;
   trackingUrl?: string;
@@ -292,6 +312,8 @@ export interface IOrderItem extends Document {
   deliveryMethod: string | null;
   packageDeliveryType: string[];
   packageSize: string | null;
+  fulfillmentSouvenir?: IFulfillmentListingSnapshot;
+  fulfillmentCustomBag?: IFulfillmentListingSnapshot;
 }
 
 

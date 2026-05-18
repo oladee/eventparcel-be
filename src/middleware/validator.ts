@@ -388,16 +388,17 @@ const validateEventGroup = (data: IEventGroup): ValidationResult => {
       .messages({
         // 'string.pattern.base': 'Group description can only contain alphanumeric characters',
       }),
-    groupCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD").required().messages({
+    groupCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD", "GBP").required().messages({
       'string.empty': 'Group currency is required',
       'any.required': 'Group currency is required',
-      'any.only': 'Group currency must be either "NGN", "USD" or "CAD" ',
+      'any.only': 'Group currency must be either "NGN", "USD", "CAD" or "GBP" ',
     }),
     groupPrivacy: Joi.string().valid('general', 'private').default('private').messages({
       'string.empty': 'Group privacy is required',
       'any.only': 'Group privacy must be either "general" or "private"',
     }),
     isDraft: Joi.boolean().default(false),
+    serviceFeeAppliedToGuest: Joi.boolean().optional(),
   });
 
   return eventGroupValidationSchema.validate(data, { abortEarly: false });
@@ -418,13 +419,14 @@ const validateUpdatedEventGroup = (data: IEventGroup): ValidationResult => {
       .max(150).empty('').default('NA').messages({
         // 'string.pattern.base': 'Group description can only contain alphanumeric characters',
       }),
-    groupCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD").empty('').optional().messages({
-      'any.only': 'Group currency must be either "NGN", "USD" or "CAD" ',
+    groupCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD", "GBP").empty('').optional().messages({
+      'any.only': 'Group currency must be either "NGN", "USD", "CAD" or "GBP" ',
     }),
     groupPrivacy: Joi.string().valid('general', 'private').default('private').messages({
       'any.only': 'Group privacy must be either "general" or "private"',
     }),
     isDraft: Joi.boolean().default(false),
+    serviceFeeAppliedToGuest: Joi.boolean().optional(),
   });
 
   return eventGroupValidationSchema.validate(data, { abortEarly: false });
@@ -466,10 +468,10 @@ const validatePackage = (data: IPackage): ValidationResult => {
         'string.max': 'Package description must be a minimum of 150 character',
         // 'string.pattern.base': 'Package description can only contain alphanumeric characters',
       }),
-    packagePriceCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD").required().messages({
+    packagePriceCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD", "GBP").required().messages({
       'string.empty': 'Package price currency is required',
       'any.required': 'Package price currency is required',
-      'any.only': 'Package price currency must be either "NGN", "USD" or "CAD" ',
+      'any.only': 'Package price currency must be either "NGN", "USD", "CAD" or "GBP" ',
     }),
     packagePrice: Joi.number().min(0).required().messages({
       'number.base': 'Package price must be a number',
@@ -507,6 +509,26 @@ const validatePackage = (data: IPackage): ValidationResult => {
       'any.only': 'Package status must be either "draft", "active", "archived" or "deleted"',
     }),
     isDraft: Joi.boolean().default(false),
+    souvenirListingId: Joi.string()
+      .optional()
+      .allow("", null)
+      .custom((value, helpers) => {
+        if (!value || value === "") return value;
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          return helpers.message({ custom: "Invalid souvenirListingId." });
+        }
+        return value;
+      }),
+    customBagListingId: Joi.string()
+      .optional()
+      .allow("", null)
+      .custom((value, helpers) => {
+        if (!value || value === "") return value;
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          return helpers.message({ custom: "Invalid customBagListingId." });
+        }
+        return value;
+      }),
   });
 
   return packageValidationSchema.validate(data, { abortEarly: false });
@@ -534,8 +556,8 @@ const validateUpdatedPackage = (data: IPackage): ValidationResult => {
         'string.max': 'Package description must be a minimum of 150 character',
         // 'string.pattern.base': 'Package description can only contain alphanumeric characters',
       }),
-    packagePriceCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD").empty('').optional().messages({
-      'any.only': 'Package price currency must be either "NGN", "USD" or "CAD" ',
+    packagePriceCurrency: Joi.string().min(3).valid("NGN", "USD", "CAD", "GBP").empty('').optional().messages({
+      'any.only': 'Package price currency must be either "NGN", "USD", "CAD" or "GBP" ',
     }),
     packagePrice: Joi.number().min(0).messages({
       'number.min': 'Package price must be greater or equal to zero',
@@ -570,6 +592,26 @@ const validateUpdatedPackage = (data: IPackage): ValidationResult => {
       'any.only': 'Package status must be either "draft", "active", "archived" or "deleted"',
     }),
     isDraft: Joi.boolean().default(false),
+    souvenirListingId: Joi.string()
+      .optional()
+      .allow("", null)
+      .custom((value, helpers) => {
+        if (!value || value === "") return value;
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          return helpers.message({ custom: "Invalid souvenirListingId." });
+        }
+        return value;
+      }),
+    customBagListingId: Joi.string()
+      .optional()
+      .allow("", null)
+      .custom((value, helpers) => {
+        if (!value || value === "") return value;
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          return helpers.message({ custom: "Invalid customBagListingId." });
+        }
+        return value;
+      }),
   });
 
   return packageValidationSchema.validate(data, { abortEarly: false });

@@ -574,6 +574,38 @@ export const convertUsdToNgn = async (amountInUsd: number) => {
 };
 
 
+/** Delivery / fee helpers: NGN stays NGN; USD uses NGN→USD; GBP prefers DB rates NGN→GBP else USD bridge */
+export const convertNgnToCheckoutCurrency = async (
+  amountInNgn: number,
+  currency: string
+): Promise<number> => {
+  const c = currency.toUpperCase();
+  if (c === "NGN") return amountInNgn;
+  if (c === "USD") return Number(await convertNgnToUsd(amountInNgn));
+  if (c === "GBP") {
+    try {
+      const direct = await ExchangeRateModel.findOne({ from: "NGN", to: "GBP" }).sort({
+        updatedAt: -1,
+      });
+      if (direct?.rate && direct.rate > 0) {
+        return Math.round(amountInNgn * direct.rate * 100) / 100;
+      }
+      const usd = Number(await convertNgnToUsd(amountInNgn));
+      const bridge = await ExchangeRateModel.findOne({ from: "USD", to: "GBP" }).sort({
+        updatedAt: -1,
+      });
+      if (bridge?.rate && bridge.rate > 0) {
+        return Math.round(usd * bridge.rate * 100) / 100;
+      }
+      return Math.round(usd * 100) / 100;
+    } catch {
+      return Number(await convertNgnToUsd(amountInNgn));
+    }
+  }
+  throw new Error("Unsupported checkout currency.");
+};
+
+
 export const formatPrice = (amount: number, currency: 'NGN' | 'USD' = 'NGN'): string => {
   const symbols: Record<string, string> = {
     NGN: '₦',

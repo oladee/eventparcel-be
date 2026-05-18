@@ -167,6 +167,10 @@ const EventGroupSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
+    serviceFeeAppliedToGuest: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
@@ -247,6 +251,16 @@ const PackageSchema: Schema = new Schema(
     isDraft: {
       type: Boolean,
       default: false,
+    },
+    souvenirListing: {
+      type: Schema.Types.ObjectId,
+      ref: "SouvenirListing",
+      default: null,
+    },
+    customBagListing: {
+      type: Schema.Types.ObjectId,
+      ref: "CustomBagListing",
+      default: null,
     },
   },
   { timestamps: true }

@@ -31,6 +31,7 @@ import adminFeeSummaryRoute from './routes/feeSummaryRoutes';
 import adminHostRoute from './routes/adminHostRoute';
 import adminStateRoute from './routes/adminStateRoute';
 import adminDeliveryFeeAuditLogRoute from './routes/adminDeliveryFeeAuditLogRoute';
+import adminBillingRoute from "./routes/adminBillingRoute";
 import deletionRoute from './routes/deletionRoute';
 import monitorRoutes from "./routes/monitor";
 import deliveryFee from "./routes/deliveryFeeRoute";
@@ -215,6 +216,7 @@ app.use('/api/v1', adminFeeSummaryRoute);
 app.use('/api/v1', adminHostRoute);
 app.use('/api/v1', adminStateRoute);
 app.use('/api/v1', adminDeliveryFeeAuditLogRoute);
+app.use('/api/v1', adminBillingRoute);
 app.use('/api/v1', deletionRoute);
 app.use('/api/v1', deliveryFee);
 

@@ -142,21 +142,22 @@ class PaymentService {
     }
   }
 
-  // Initiate a payment with PayPal
+  // Initiate a payment with PayPal (supports USD, GBP, etc.)
   static async initiatePaymentPaypal(
     email: string,
     amount: number,
     orderId: string,
-    hostId: string
+    hostId: string,
+    currencyCode: string = "USD"
   ) {
     try {
-      // Create payment record in DB
+      const upper = (currencyCode || "USD").toUpperCase();
       const payment = await this.createPayment(
         orderId,
         hostId,
         email,
         amount,
-        "USD"
+        upper
       );
 
       // Create PayPal order
@@ -168,7 +169,7 @@ class PaymentService {
           {
             reference_id: payment.paymentReference,
             amount: {
-              currency_code: "USD", // Or your local currency
+              currency_code: upper,
               value: amount.toFixed(2),
             },
           },
