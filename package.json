@@ -7,6 +7,7 @@
     "start": "node dist/server.js",
     "dev": "nodemon server.ts",
     "build": "tsc",
+    "render-build": "npm install --include=dev && npm run build",
     "clean": "rimraf dist .cache/ts-node",
     "clean:tsnode": "rimraf %USERPROFILE%\\.cache\\ts-node",
     "replay:paypal:capture": "ts-node --files src/cron-job/replayMissedPaypalCaptureJob.ts",
