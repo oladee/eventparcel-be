@@ -94,7 +94,22 @@ const authorizeRole = (requiredRole: string) => {
   };
 };
 
+/** Allow only users whose role is one of the listed roles (exact match). */
+const authorizeRoles = (...allowedRoles: string[]) => {
+  const allowed = new Set(allowedRoles);
 
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userRole = req.user?.role;
 
+    if (!userRole || !allowed.has(userRole)) {
+      return ErrorHandler.unauthorized(
+        res,
+        "You do not have permission to access this resource!"
+      );
+    }
 
-export { authenticate, authorizeRole, };
+    next();
+  };
+};
+
+export { authenticate, authorizeRole, authorizeRoles };

@@ -974,7 +974,7 @@
     },
     {
       "name": "Billing & Fulfillment",
-      "description": "Group/package fields that affect fees, fulfillment, and guest checkout are documented in **Events & Packages (Host)**.\n\nAdmin: per-currency platform **service fee rates** (`ratePercent`, optional `minimumCap` / `maximumCap`, optional platform-wide `allowHostToPassServiceFeeToGuest` — mirrored on all currency rows), plus CRUD for **souvenir** and **custom bag** fulfillment listings.\n\nHost/cohost: read-only **active** catalogs used when creating packages — optional body fields `souvenirListingId` and `customBagListingId` on package create/update (must match the event group's currency).\n\n**Related checkout fields (orders):** `checkoutFeeSchema` (v2+), `txnFee` = platform service fee, `paymentProcessingFeeEstimate` for PSP-side estimate, `serviceFeeAppliedToGuest` on the group.\n\n**Auth:** Admin routes → `adminToken`. Catalog GETs → `userToken`; routes require **cohost** role.",
+      "description": "Group/package fields that affect fees, fulfillment, and guest checkout are documented in **Events & Packages (Host)**.\n\nAdmin: per-currency platform **service fee rates** (`ratePercent`, optional `minimumCap` / `maximumCap`, optional platform-wide `allowHostToPassServiceFeeToGuest` — mirrored on all currency rows), plus CRUD for **souvenir** and **custom bag** fulfillment listings.\n\nHost/cohost: read-only **active** catalogs used when creating packages — optional body fields `souvenirListingId` and `customBagListingId` on package create/update (must match the event group's currency).\n\n**Related checkout fields (orders):** `checkoutFeeSchema` (v2+), `txnFee` = platform service fee, `paymentProcessingFeeEstimate` for PSP-side estimate, `serviceFeeAppliedToGuest` on the group.\n\n**Auth:** Admin routes → `adminToken`. Catalog GETs → `userToken`; routes require **host** or **cohost** role.",
       "item": [
         {
           "name": "List Service Fee Rates",
@@ -1305,7 +1305,7 @@
                 "souvenirs"
               ]
             },
-            "description": "Active listings for package linking. **Requires cohost** (see `authorizeRole`)."
+            "description": "Active listings for package linking. **Requires host or cohost** (`authorizeRoles`)."
           },
           "response": []
         },
@@ -1330,7 +1330,7 @@
                 "custom-bags"
               ]
             },
-            "description": "Active listings for package linking. **Requires cohost**."
+            "description": "Active listings for package linking. **Requires host or cohost**."
           },
           "response": []
         }

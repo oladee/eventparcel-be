@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorizeRole } from "../middleware/authentication";
+import { authenticate, authorizeRole, authorizeRoles } from "../middleware/authentication";
 import {
   listServiceFeeRates,
   upsertServiceFeeRate,
@@ -76,13 +76,13 @@ router.put(
 router.get(
   "/fulfillment-catalog/souvenirs",
   authenticate,
-  authorizeRole("cohost"),
+  authorizeRoles("host", "cohost"),
   listActiveSouvenirsHost
 );
 router.get(
   "/fulfillment-catalog/custom-bags",
   authenticate,
-  authorizeRole("cohost"),
+  authorizeRoles("host", "cohost"),
   listActiveCustomBagsHost
 );
 
