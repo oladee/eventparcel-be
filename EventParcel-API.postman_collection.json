@@ -2,14 +2,14 @@
   "info": {
     "name": "EventParcel API v2",
     "_postman_id": "eventparcel-api-v2-collection",
-    "description": "# EventParcel API v2\n\nComplete API reference for the EventParcel backend.\n\n## Base URL\nSet the `baseUrl` collection variable to your environment, e.g.:\n- **Local:** `http://localhost:5000/api/v1`\n- **Staging:** `https://staging.eventparcel.com/api/v1`\n- **Production:** `https://api.eventparcel.com/api/v1`\n\n## Authentication\nMost endpoints require a Bearer token. Set the `adminToken` or `userToken` collection variable after logging in.\n\n```\nAuthorization: Bearer <token>\n```\n\n## Response Format\nAll responses follow the structure:\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Human-readable message\",\n  \"data\": { ... }\n}\n```\n\n## Error Format\n```json\n{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Error description\"\n}\n```\n\n### Billing & Fulfillment\n**Service fee rates** (per NGN/USD/GBP) include optional platform-wide `allowHostToPassServiceFeeToGuest` (set via the same upsert body, mirrored across rows). Souvenir/custom bag admin CRUD and host fulfillment catalog reads are in the **Billing & Fulfillment** request folder.\n\n### Events & Packages (Host)\nEvent groups (**`serviceFeeAppliedToGuest`**), packages (fulfillment **`souvenirListingId`** / **`customBagListingId`**), and guest checkout (**`txnFee`**, **`paymentProcessingFeeEstimate`**, **`checkoutFeeSchema`**) are documented in the **Events & Packages (Host)** folder.",
+    "description": "# EventParcel API v2\n\nComplete API reference for the EventParcel backend.\n\n## Base URL\nSet the `baseUrl` collection variable to your environment, e.g.:\n- **Local:** `http://localhost:4000/api/v1` (or your `PORT` env)\n- **Staging:** `https://staging.eventparcel.com/api/v1`\n- **Production:** `https://api.eventparcel.com/api/v1`\n\n## Authentication\nMost endpoints require a Bearer token. Set the `adminToken` or `userToken` collection variable after logging in.\n\n```\nAuthorization: Bearer <token>\n```\n\n## Response Format\nAll responses follow the structure:\n```json\n{\n  \"success\": true,\n  \"statusCode\": 200,\n  \"message\": \"Human-readable message\",\n  \"data\": { ... }\n}\n```\n\n## Error Format\n```json\n{\n  \"success\": false,\n  \"statusCode\": 400,\n  \"message\": \"Error description\"\n}\n```\n\n### Billing & Fulfillment\n**Service fee rates** (per NGN/USD/GBP) include optional platform-wide `allowHostToPassServiceFeeToGuest` (set via the same upsert body, mirrored across rows). Souvenir/custom bag admin CRUD and host fulfillment catalog reads are in the **Billing & Fulfillment** request folder.\n\n### Events & Packages (Host)\nEvent groups (**`serviceFeeAppliedToGuest`**), packages (fulfillment **`souvenirListingId`** / **`customBagListingId`**), and guest checkout (**`txnFee`**, **`paymentProcessingFeeEstimate`**, **`checkoutFeeSchema`**) are documented in the **Events & Packages (Host)** folder.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000/api/v1",
-      "description": "Base URL for the API. Change this to match your environment."
+      "value": "http://localhost:4000/api/v1",
+      "description": "Base URL for the API. Default port matches server (PORT env or 4000). Change for staging/production."
     },
     {
       "key": "adminToken",

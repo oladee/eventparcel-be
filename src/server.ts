@@ -244,6 +244,11 @@ const PORT = process.env.PORT || 4000;
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
       console.log(`🔧 Bull Dashboard UI available at http://localhost:${PORT}/admin/queues`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `📋 Admin billing: GET/PUT/DELETE http://localhost:${PORT}/api/v1/admin/service-fee-rates`
+        );
+      }
     });
   } catch (error) {
     console.error("Error starting the server:", error);
