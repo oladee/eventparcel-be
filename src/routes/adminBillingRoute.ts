@@ -85,5 +85,11 @@ router.get(
   authorizeRoles("host", "cohost"),
   listActiveCustomBagsHost
 );
+router.get(
+  "/host/service-fee-rates",
+  authenticate,
+  authorizeRoles("host", "cohost"),
+  listServiceFeeRates
+);
 
 export default router;
